@@ -1,0 +1,178 @@
+.dashboard-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 260px;
+  background: var(--bg-sidebar);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  z-index: 50;
+
+  .sidebar-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    .sidebar-logo {
+      display: flex; align-items: center; gap: 0.5rem;
+      .logo-icon { font-size: 1.5rem; }
+      .logo-text { color: white; font-weight: 700; font-size: 1.2rem; }
+    }
+  }
+
+  .sidebar-nav {
+    flex: 1; padding: 1rem 0.75rem;
+    display: flex; flex-direction: column; gap: 0.25rem;
+  }
+
+  .nav-item {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 0.75rem 1rem; border-radius: var(--border-radius-sm);
+    color: rgba(255, 255, 255, 0.65); font-size: 0.9rem; font-weight: 500;
+    transition: all var(--transition); background: none; width: 100%; text-align: left;
+    &:hover { background: var(--bg-sidebar-hover); color: white; }
+    &.active { background: var(--primary); color: white; }
+  }
+
+  .sidebar-footer {
+    padding: 0.75rem; border-top: 1px solid rgba(255, 255, 255, 0.1);
+    .logout-btn { cursor: pointer; &:hover { background: rgba(239, 68, 68, 0.2); color: #fca5a5; } }
+  }
+}
+
+.main-content {
+  flex: 1; margin-left: 260px; padding: 2rem;
+  background: var(--bg-secondary); min-height: 100vh;
+}
+
+.page-header {
+  margin-bottom: 2rem;
+  h1 { font-size: 1.75rem; font-weight: 800; color: var(--text-primary); }
+  p { color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.25rem; }
+}
+
+.alert {
+  padding: 0.75rem 1rem;
+  border-radius: var(--border-radius-sm);
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+
+  &.alert-success {
+    background: rgba(34, 197, 94, 0.08);
+    color: #16a34a;
+    border: 1px solid rgba(34, 197, 94, 0.2);
+  }
+}
+
+.profile-card {
+  background: var(--bg-primary);
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--border-color);
+  padding: 2rem;
+
+  .profile-header {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--border-color);
+
+    .avatar-large {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: var(--gradient-primary);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .profile-name {
+      flex: 1;
+      h2 { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); }
+      .badge-role {
+        display: inline-block;
+        margin-top: 0.25rem;
+        padding: 0.2rem 0.75rem;
+        background: rgba(102, 126, 234, 0.1);
+        color: var(--primary);
+        border-radius: 9999px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        text-transform: capitalize;
+      }
+    }
+  }
+
+  .profile-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+
+    .detail-row {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+
+      .detail-label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .detail-value {
+        font-size: 1rem;
+        color: var(--text-primary);
+        font-weight: 500;
+      }
+    }
+  }
+
+  .edit-form {
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border-color);
+
+    h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 1rem; }
+
+    .form-group {
+      margin-bottom: 1rem;
+
+      label {
+        display: block;
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin-bottom: 0.4rem;
+        color: var(--text-primary);
+      }
+
+      input {
+        width: 100%;
+        max-width: 400px;
+        padding: 0.75rem 1rem;
+        border: 1.5px solid var(--border-color);
+        border-radius: var(--border-radius-sm);
+        font-size: 0.9rem;
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        &:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
+      }
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .main-content { margin-left: 0; padding: 1.5rem; }
+  .profile-card .profile-header { flex-direction: column; text-align: center; }
+  .profile-card .profile-details { grid-template-columns: 1fr; }
+}

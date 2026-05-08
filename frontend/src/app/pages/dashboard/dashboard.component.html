@@ -1,0 +1,161 @@
+<div class="dashboard-layout">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <a routerLink="/" class="sidebar-logo">
+        <span class="logo-icon">📦</span>
+        <span class="logo-text">Campus L&amp;F</span>
+      </a>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a routerLink="/dashboard" class="nav-item active">
+        <span class="nav-icon">📊</span>
+        <span class="nav-label">Dashboard</span>
+      </a>
+      <a routerLink="/lost-items" class="nav-item">
+        <span class="nav-icon">🔍</span>
+        <span class="nav-label">Lost Items</span>
+      </a>
+      <a routerLink="/found-items" class="nav-item">
+        <span class="nav-icon">📋</span>
+        <span class="nav-label">Found Items</span>
+      </a>
+      <a routerLink="/claims" class="nav-item">
+        <span class="nav-icon">✅</span>
+        <span class="nav-label">Claims</span>
+      </a>
+      @if (isAdmin) {
+        <a routerLink="/admin" class="nav-item">
+          <span class="nav-icon">⚙️</span>
+          <span class="nav-label">Admin</span>
+        </a>
+      }
+      <a routerLink="/profile" class="nav-item">
+        <span class="nav-icon">👤</span>
+        <span class="nav-label">Profile</span>
+      </a>
+      <a routerLink="/notifications" class="nav-item">
+        <span class="nav-icon">🔔</span>
+        <span class="nav-label">Notifications</span>
+        @if (unreadCount > 0) {
+          <span class="nav-badge">{{ unreadCount }}</span>
+        }
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button class="nav-item logout-btn" (click)="logout()">
+        <span class="nav-icon">🚪</span>
+        <span class="nav-label">Logout</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Top Bar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <h1>Dashboard</h1>
+        <p>Welcome back, {{ user?.full_name || 'User' }}!</p>
+      </div>
+      <div class="topbar-right">
+        <a routerLink="/notifications" class="notification-bell">
+          <span>🔔</span>
+          @if (unreadCount > 0) {
+            <span class="bell-badge">{{ unreadCount }}</span>
+          }
+        </a>
+        <div class="user-avatar">{{ user?.full_name?.charAt(0) || 'U' }}</div>
+      </div>
+    </header>
+
+    <!-- Stats Cards -->
+    <section class="stats-section">
+      <div class="stat-card lost">
+        <div class="stat-icon">🔍</div>
+        <div class="stat-info">
+          <span class="stat-number">{{ stats.totalLost }}</span>
+          <span class="stat-label">Lost Items</span>
+        </div>
+      </div>
+      <div class="stat-card found">
+        <div class="stat-icon">📋</div>
+        <div class="stat-info">
+          <span class="stat-number">{{ stats.totalFound }}</span>
+          <span class="stat-label">Found Items</span>
+        </div>
+      </div>
+      <div class="stat-card claimed">
+        <div class="stat-icon">✅</div>
+        <div class="stat-info">
+          <span class="stat-number">{{ stats.totalClaimed }}</span>
+          <span class="stat-label">Claimed</span>
+        </div>
+      </div>
+      <div class="stat-card pending">
+        <div class="stat-icon">⏳</div>
+        <div class="stat-info">
+          <span class="stat-number">{{ stats.pendingClaims }}</span>
+          <span class="stat-label">Pending Claims</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Quick Actions & Recent Activities -->
+    <div class="content-grid">
+      <section class="quick-actions">
+        <h2>Quick Actions</h2>
+        <div class="actions-grid">
+          <a routerLink="/lost-items" class="action-card">
+            <span class="action-icon">🔍</span>
+            <span class="action-label">Report Lost</span>
+          </a>
+          <a routerLink="/found-items" class="action-card">
+            <span class="action-icon">📋</span>
+            <span class="action-label">Report Found</span>
+          </a>
+          <a routerLink="/claims" class="action-card">
+            <span class="action-icon">📝</span>
+            <span class="action-label">My Claims</span>
+          </a>
+        </div>
+      </section>
+
+      <section class="recent-activities">
+        <h2>Recent Activities</h2>
+        <div class="activities-list">
+          @if (stats.recentActivities.length === 0) {
+            <div class="empty-state">
+              <span>📭</span>
+              <p>No recent activities</p>
+            </div>
+          } @else {
+            @for (activity of stats.recentActivities; track $index) {
+              <div class="activity-item">
+                <div class="activity-dot"></div>
+                <div class="activity-content">
+                  <p>{{ activity.description || activity.action }}</p>
+                  <span class="activity-time">{{ activity.created_at | date:'short' }}</span>
+                </div>
+              </div>
+            }
+          }
+        </div>
+      </section>
+    </div>
+
+    <!-- Announcements -->
+    <section class="announcements-section">
+      <h2>Announcements</h2>
+      <div class="announcement-card">
+        <div class="announcement-badge">📢</div>
+        <div class="announcement-content">
+          <h3>Welcome to Campus L&amp;F</h3>
+          <p>Report lost items and browse found items to reunite with your belongings. Check notifications for matches!</p>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>

@@ -1,0 +1,163 @@
+<div class="dashboard-layout">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <a routerLink="/" class="sidebar-logo">
+        <span class="logo-icon">📦</span>
+        <span class="logo-text">Campus L&amp;F</span>
+      </a>
+    </div>
+    <nav class="sidebar-nav">
+      <a routerLink="/dashboard" class="nav-item">
+        <span class="nav-icon">📊</span><span class="nav-label">Dashboard</span>
+      </a>
+      <a routerLink="/lost-items" class="nav-item">
+        <span class="nav-icon">🔍</span><span class="nav-label">Lost Items</span>
+      </a>
+      <a routerLink="/found-items" class="nav-item">
+        <span class="nav-icon">📋</span><span class="nav-label">Found Items</span>
+      </a>
+      <a routerLink="/claims" class="nav-item">
+        <span class="nav-icon">✅</span><span class="nav-label">Claims</span>
+      </a>
+      <a routerLink="/admin" class="nav-item active">
+        <span class="nav-icon">⚙️</span><span class="nav-label">Admin</span>
+      </a>
+      <a routerLink="/profile" class="nav-item">
+        <span class="nav-icon">👤</span><span class="nav-label">Profile</span>
+      </a>
+      <a routerLink="/notifications" class="nav-item">
+        <span class="nav-icon">🔔</span><span class="nav-label">Notifications</span>
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <button class="nav-item logout-btn" (click)="logout()">
+        <span class="nav-icon">🚪</span><span class="nav-label">Logout</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <header class="page-header">
+      <h1>Admin Panel</h1>
+      <p>Manage users, announcements, and system settings</p>
+    </header>
+
+    <!-- Tab Navigation -->
+    <div class="tab-nav">
+      <button class="tab-btn" [class.active]="activeTab === 'users'" (click)="switchTab('users')">Users</button>
+      <button class="tab-btn" [class.active]="activeTab === 'announcements'" (click)="switchTab('announcements')">Announcements</button>
+      <button class="tab-btn" [class.active]="activeTab === 'activity'" (click)="switchTab('activity')">Activity Logs</button>
+    </div>
+
+    <!-- Users Tab -->
+    @if (activeTab === 'users') {
+      <section class="tab-content">
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Campus</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (user of users; track user.id) {
+                <tr>
+                  <td>{{ user.full_name }}</td>
+                  <td>{{ user.email }}</td>
+                  <td><span class="badge badge-role-{{ user.role }}">{{ user.role }}</span></td>
+                  <td>{{ user.campus_name || '-' }}</td>
+                  <td>
+                    <select (change)="updateRole(user.id, $any($event.target).value)" [value]="user.role" class="role-select">
+                      <option value="student">Student</option>
+                      <option value="faculty">Faculty</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    }
+
+    <!-- Announcements Tab -->
+    @if (activeTab === 'announcements') {
+      <section class="tab-content">
+        <div class="announcement-form-card">
+          <h3>Create Announcement</h3>
+          <form [formGroup]="announcementForm" (ngSubmit)="createAnnouncement()">
+            <div class="form-group">
+              <label>Title</label>
+              <input type="text" formControlName="title" placeholder="Announcement title" />
+            </div>
+            <div class="form-group">
+              <label>Content</label>
+              <textarea formControlName="content" rows="3" placeholder="Announcement content..."></textarea>
+            </div>
+            <div class="form-group">
+              <label>Priority</label>
+              <select formControlName="priority">
+                <option value="low">Low</option>
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </div>
+            <button type="submit" class="btn btn-primary" [disabled]="announcementForm.invalid">Publish Announcement</button>
+          </form>
+        </div>
+
+        <div class="announcements-list">
+          @for (ann of announcements; track ann.id) {
+            <div class="announcement-item">
+              <div class="ann-info">
+                <h4>{{ ann.title }}</h4>
+                <p>{{ ann.content }}</p>
+                <span class="ann-meta">{{ ann.created_at | date:'medium' }} · Priority: {{ ann.priority }}</span>
+              </div>
+              <button class="btn-icon-delete" (click)="deleteAnnouncement(ann.id)">🗑️</button>
+            </div>
+          }
+        </div>
+      </section>
+    }
+
+    <!-- Activity Logs Tab -->
+    @if (activeTab === 'activity') {
+      <section class="tab-content">
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Action</th>
+                <th>User</th>
+                <th>Details</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (log of activityLogs; track $index) {
+                <tr>
+                  <td>{{ log.action }}</td>
+                  <td>{{ log.user_name || 'System' }}</td>
+                  <td>{{ log.details || '-' }}</td>
+                  <td>{{ log.created_at | date:'short' }}</td>
+                </tr>
+              }
+              @if (activityLogs.length === 0) {
+                <tr><td colspan="4" class="empty-cell">No activity logs found</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    }
+  </main>
+</div>

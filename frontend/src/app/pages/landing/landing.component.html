@@ -1,0 +1,123 @@
+<div class="landing">
+  <!-- Navbar -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <a routerLink="/" class="logo">
+        <span class="logo-icon">📦</span>
+        <span class="logo-text">Campus L&amp;F</span>
+      </a>
+      <ul class="nav-links">
+        <li><a routerLink="/" class="nav-link active">Home</a></li>
+        <li><a href="#features" class="nav-link">Features</a></li>
+        <li><a href="#about" class="nav-link">About</a></li>
+        <li><a routerLink="/login" class="nav-link">Login</a></li>
+        <li><a routerLink="/register" class="nav-link btn-nav">Register</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="hero-content">
+      <h1 class="hero-title">Never Lose Track Again</h1>
+      <p class="hero-subtitle">The smartest campus lost and found system. Report, track, and recover your belongings with ease across all campus locations.</p>
+      <div class="hero-actions">
+        <a routerLink="/lost-items" class="btn btn-hero-primary">Report Lost Item</a>
+        <a routerLink="/found-items" class="btn btn-hero-secondary">Browse Found Items</a>
+      </div>
+    </div>
+    <div class="hero-visual">
+      <div class="hero-card card-1">
+        <span class="card-icon">📱</span>
+        <span class="card-label">Phone Found</span>
+      </div>
+      <div class="hero-card card-2">
+        <span class="card-icon">🎒</span>
+        <span class="card-label">Bag Matched</span>
+      </div>
+      <div class="hero-card card-3">
+        <span class="card-icon">🔑</span>
+        <span class="card-label">Keys Claimed</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section class="features" id="features">
+    <div class="section-container">
+      <h2 class="section-title">Why Choose Campus L&amp;F?</h2>
+      <p class="section-subtitle">Powerful features designed to reunite you with your belongings</p>
+      <div class="features-grid">
+        @for (feature of features; track feature.title) {
+          <div class="feature-card">
+            <div class="feature-icon">{{ feature.icon }}</div>
+            <h3 class="feature-title">{{ feature.title }}</h3>
+            <p class="feature-description">{{ feature.description }}</p>
+          </div>
+        }
+      </div>
+    </div>
+  </section>
+
+  <!-- Statistics Section -->
+  <section class="statistics" id="about">
+    <div class="section-container">
+      <div class="stats-grid">
+        @for (stat of stats; track stat.label) {
+          <div class="stat-card">
+            <div class="stat-value">{{ stat.value }}</div>
+            <div class="stat-label">{{ stat.label }}</div>
+          </div>
+        }
+      </div>
+    </div>
+  </section>
+
+  <!-- Testimonials Section -->
+  <section class="testimonials">
+    <div class="section-container">
+      <h2 class="section-title">What Our Users Say</h2>
+      <p class="section-subtitle">Real stories from our campus community</p>
+      <div class="testimonials-grid">
+        @for (testimonial of testimonials; track testimonial.name) {
+          <div class="testimonial-card">
+            <div class="testimonial-avatar">{{ testimonial.name.charAt(0) }}</div>
+            <p class="testimonial-text">"{{ testimonial.text }}"</p>
+            <div class="testimonial-author">
+              <strong>{{ testimonial.name }}</strong>
+              <span>{{ testimonial.role }}</span>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-container">
+      <div class="footer-brand">
+        <span class="logo-icon">📦</span>
+        <span class="logo-text">Campus L&amp;F</span>
+        <p class="footer-tagline">Making campus life worry-free, one item at a time.</p>
+      </div>
+      <div class="footer-links">
+        <div class="footer-col">
+          <h4>Platform</h4>
+          <a routerLink="/lost-items">Lost Items</a>
+          <a routerLink="/found-items">Found Items</a>
+          <a routerLink="/claims">Claims</a>
+        </div>
+        <div class="footer-col">
+          <h4>Account</h4>
+          <a routerLink="/login">Login</a>
+          <a routerLink="/register">Register</a>
+          <a routerLink="/forgot-password">Reset Password</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2026 Campus Lost &amp; Found. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+</div>

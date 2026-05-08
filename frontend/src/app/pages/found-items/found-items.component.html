@@ -1,0 +1,154 @@
+<div class="dashboard-layout">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <a routerLink="/" class="sidebar-logo">
+        <span class="logo-icon">📦</span>
+        <span class="logo-text">Campus L&amp;F</span>
+      </a>
+    </div>
+    <nav class="sidebar-nav">
+      <a routerLink="/dashboard" class="nav-item">
+        <span class="nav-icon">📊</span><span class="nav-label">Dashboard</span>
+      </a>
+      <a routerLink="/lost-items" class="nav-item">
+        <span class="nav-icon">🔍</span><span class="nav-label">Lost Items</span>
+      </a>
+      <a routerLink="/found-items" class="nav-item active">
+        <span class="nav-icon">📋</span><span class="nav-label">Found Items</span>
+      </a>
+      <a routerLink="/claims" class="nav-item">
+        <span class="nav-icon">✅</span><span class="nav-label">Claims</span>
+      </a>
+      <a routerLink="/profile" class="nav-item">
+        <span class="nav-icon">👤</span><span class="nav-label">Profile</span>
+      </a>
+      <a routerLink="/notifications" class="nav-item">
+        <span class="nav-icon">🔔</span><span class="nav-label">Notifications</span>
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <button class="nav-item logout-btn" (click)="logout()">
+        <span class="nav-icon">🚪</span><span class="nav-label">Logout</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <header class="page-header">
+      <div>
+        <h1>Found Items</h1>
+        <p>Browse and report found items on campus</p>
+      </div>
+      <button class="btn btn-primary" (click)="toggleReportForm()">
+        @if (showReportForm) { ✕ Close } @else { + Report Found Item }
+      </button>
+    </header>
+
+    <!-- Report Form -->
+    @if (showReportForm) {
+      <section class="report-form-section">
+        <h2>Report a Found Item</h2>
+        <form [formGroup]="reportForm" (ngSubmit)="submitReport()" class="report-form">
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Item Name</label>
+              <input type="text" formControlName="item_name" placeholder="e.g. Black Wallet" />
+            </div>
+            <div class="form-group">
+              <label>Category</label>
+              <select formControlName="category_id">
+                <option value="" disabled>Select category</option>
+                @for (cat of categories; track cat.id) {
+                  <option [value]="cat.id">{{ cat.category_name }}</option>
+                }
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Location Found</label>
+              <input type="text" formControlName="location" placeholder="e.g. Cafeteria Table 5" />
+            </div>
+            <div class="form-group">
+              <label>Pickup Location</label>
+              <input type="text" formControlName="pickup_location" placeholder="e.g. Security Office" />
+            </div>
+            <div class="form-group">
+              <label>Date Found</label>
+              <input type="date" formControlName="date_found" />
+            </div>
+            <div class="form-group full-width">
+              <label>Description</label>
+              <textarea formControlName="description" rows="3" placeholder="Describe the found item..."></textarea>
+            </div>
+            <div class="form-group full-width">
+              <label>Verification Notes</label>
+              <textarea formControlName="verification_notes" rows="2" placeholder="Unique identifiers to verify ownership..."></textarea>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary" [disabled]="reportForm.invalid">Submit Report</button>
+        </form>
+      </section>
+    }
+
+    <!-- Filters -->
+    <section class="filter-bar">
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="text" placeholder="Search found items..." [(ngModel)]="searchQuery" (keyup.enter)="applyFilters()" />
+      </div>
+      <select [(ngModel)]="filterCategory" (change)="applyFilters()">
+        <option value="">All Categories</option>
+        @for (cat of categories; track cat.id) {
+          <option [value]="cat.id">{{ cat.category_name }}</option>
+        }
+      </select>
+      <select [(ngModel)]="filterStatus" (change)="applyFilters()">
+        <option value="">All Status</option>
+        <option value="pending">Pending</option>
+        <option value="matched">Matched</option>
+        <option value="claimed">Claimed</option>
+      </select>
+    </section>
+
+    <!-- Items Grid -->
+    <section class="items-grid">
+      @if (isLoading) {
+        <div class="loading-state">
+          <div class="spinner-lg"></div>
+          <p>Loading items...</p>
+        </div>
+      } @else if (foundItems.length === 0) {
+        <div class="empty-state">
+          <span>📭</span>
+          <h3>No found items yet</h3>
+          <p>Try adjusting your filters or report a found item.</p>
+        </div>
+      } @else {
+        @for (item of foundItems; track item.id) {
+          <div class="item-card">
+            <div class="item-image">
+              @if (item.image) {
+                <img [src]="item.image" [alt]="item.item_name" />
+              } @else {
+                <div class="image-placeholder">📷</div>
+              }
+            </div>
+            <div class="item-info">
+              <div class="item-header">
+                <h3>{{ item.item_name }}</h3>
+                <span class="badge badge-{{ item.status }}">{{ item.status }}</span>
+              </div>
+              <p class="item-category">{{ item.category_name || 'Uncategorized' }}</p>
+              <p class="item-location">📍 {{ item.location }}</p>
+              <p class="item-date">📅 {{ item.date_found | date:'mediumDate' }}</p>
+              @if (item.pickup_location) {
+                <p class="item-pickup">🏢 Pickup: {{ item.pickup_location }}</p>
+              }
+            </div>
+          </div>
+        }
+      }
+    </section>
+  </main>
+</div>

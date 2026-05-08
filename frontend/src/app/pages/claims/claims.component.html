@@ -1,0 +1,102 @@
+<div class="dashboard-layout">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <a routerLink="/" class="sidebar-logo">
+        <span class="logo-icon">📦</span>
+        <span class="logo-text">Campus L&amp;F</span>
+      </a>
+    </div>
+    <nav class="sidebar-nav">
+      <a routerLink="/dashboard" class="nav-item">
+        <span class="nav-icon">📊</span><span class="nav-label">Dashboard</span>
+      </a>
+      <a routerLink="/lost-items" class="nav-item">
+        <span class="nav-icon">🔍</span><span class="nav-label">Lost Items</span>
+      </a>
+      <a routerLink="/found-items" class="nav-item">
+        <span class="nav-icon">📋</span><span class="nav-label">Found Items</span>
+      </a>
+      <a routerLink="/claims" class="nav-item active">
+        <span class="nav-icon">✅</span><span class="nav-label">Claims</span>
+      </a>
+      @if (isAdmin) {
+        <a routerLink="/admin" class="nav-item">
+          <span class="nav-icon">⚙️</span><span class="nav-label">Admin</span>
+        </a>
+      }
+      <a routerLink="/profile" class="nav-item">
+        <span class="nav-icon">👤</span><span class="nav-label">Profile</span>
+      </a>
+      <a routerLink="/notifications" class="nav-item">
+        <span class="nav-icon">🔔</span><span class="nav-label">Notifications</span>
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <button class="nav-item logout-btn" (click)="logout()">
+        <span class="nav-icon">🚪</span><span class="nav-label">Logout</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <header class="page-header">
+      <div>
+        <h1>Claims</h1>
+        <p>{{ isAdmin ? 'Manage all claims' : 'Track your item claims' }}</p>
+      </div>
+    </header>
+
+    <!-- Filter -->
+    <section class="filter-bar">
+      <select [(ngModel)]="filterStatus" (change)="loadClaims()">
+        <option value="">All Status</option>
+        <option value="pending">Pending</option>
+        <option value="approved">Approved</option>
+        <option value="rejected">Rejected</option>
+      </select>
+    </section>
+
+    <!-- Claims List -->
+    <section class="claims-list">
+      @if (isLoading) {
+        <div class="loading-state">
+          <div class="spinner-lg"></div>
+          <p>Loading claims...</p>
+        </div>
+      } @else if (claims.length === 0) {
+        <div class="empty-state">
+          <span>📭</span>
+          <h3>No claims found</h3>
+          <p>Claims will appear here once submitted.</p>
+        </div>
+      } @else {
+        @for (claim of claims; track claim.id) {
+          <div class="claim-card">
+            <div class="claim-info">
+              <div class="claim-header">
+                <h3>{{ claim.item_name || 'Item #' + (claim.lost_item_id || claim.found_item_id) }}</h3>
+                <span class="badge badge-{{ claim.status }}">{{ claim.status }}</span>
+              </div>
+              <p class="claim-proof"><strong>Proof:</strong> {{ claim.proof }}</p>
+              @if (claim.claimant_name) {
+                <p class="claim-meta">Claimed by: {{ claim.claimant_name }}</p>
+              }
+              <p class="claim-date">📅 {{ claim.created_at | date:'medium' }}</p>
+              @if (claim.admin_notes) {
+                <p class="claim-notes"><strong>Admin Notes:</strong> {{ claim.admin_notes }}</p>
+              }
+            </div>
+            @if (isAdmin && claim.status === 'pending') {
+              <div class="claim-actions">
+                <button class="btn btn-approve" (click)="approveClaim(claim.id)">✓ Approve</button>
+                <button class="btn btn-reject" (click)="rejectClaim(claim.id)">✕ Reject</button>
+              </div>
+            }
+          </div>
+        }
+      }
+    </section>
+  </main>
+</div>
