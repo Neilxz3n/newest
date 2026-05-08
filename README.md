@@ -6,7 +6,7 @@ A modern, production-ready web-based Lost & Found platform designed for campuses
 
 - **Frontend**: Angular 19 (Standalone Components, Reactive Forms, SCSS)
 - **Backend**: Node.js + Express.js (REST API)
-- **Database**: PostgreSQL 16 (ACID-compliant transactions)
+- **Database**: SQLite via better-sqlite3 (ACID-compliant, no server needed)
 - **Auth**: JWT Authentication with bcrypt password hashing
 - **Real-time**: Socket.io for live notifications
 - **Email**: Nodemailer with Gmail SMTP support
@@ -28,7 +28,6 @@ A modern, production-ready web-based Lost & Found platform designed for campuses
 ### Prerequisites
 
 - Node.js 18+
-- PostgreSQL 14+
 
 ### Backend Setup
 
@@ -36,11 +35,8 @@ A modern, production-ready web-based Lost & Found platform designed for campuses
 cd backend
 npm install
 
-# Set up database
-sudo -u postgres psql -c "CREATE USER campus_admin WITH PASSWORD 'campus_secret_2024';"
-sudo -u postgres psql -c "CREATE DATABASE campus_lost_found OWNER campus_admin;"
-sudo -u postgres psql -d campus_lost_found -c "GRANT ALL ON SCHEMA public TO campus_admin;"
-PGPASSWORD=campus_secret_2024 psql -h localhost -U campus_admin -d campus_lost_found -f src/database/schema.sql
+# Initialize and seed database (SQLite - no server needed)
+node src/database/init.js
 node src/database/seed.js
 
 # Start server
@@ -82,11 +78,6 @@ npx ng serve
 Copy `backend/.env.example` to `backend/.env` and configure:
 
 ```
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=campus_admin
-DB_PASSWORD=campus_secret_2024
-DB_NAME=campus_lost_found
 JWT_SECRET=your_secret
 EMAIL_USER=your_email@gmail.com
 EMAIL_PASS=your_app_password
