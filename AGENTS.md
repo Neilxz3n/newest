@@ -6,27 +6,27 @@
 
 | Service | Command | Port | Notes |
 |---------|---------|------|-------|
-| Backend (Express API) | `cd backend && node src/server.js` | 3000 | Requires PostgreSQL running |
+| Backend (Express API) | `cd backend && node src/server.js` | 3000 | Uses SQLite (no external DB needed) |
 | Frontend (Angular) | `cd frontend && npx ng serve` | 4200 | Proxies API calls to :3000 |
-| PostgreSQL | `sudo service postgresql start` | 5432 | Must be started before backend |
 
 ### Database
 
-- PostgreSQL 16 with database `campus_lost_found`, user `campus_admin`, password `campus_secret_2024`
-- Schema: `backend/src/database/schema.sql`
-- Seed data: `node backend/src/database/seed.js`
-- To re-initialize: run schema.sql then seed.js
+- SQLite via `better-sqlite3`, stored at `backend/data/campus_lost_found.db`
+- Schema auto-applied on first server start if tables don't exist
+- Manual init: `cd backend && node src/database/init.js` (drops and recreates all tables)
+- Seed data: `cd backend && node src/database/seed.js`
 
 ### Development startup sequence
 
-1. `sudo service postgresql start`
-2. `cd backend && node src/server.js` (or `npm run dev` for nodemon)
-3. `cd frontend && npx ng serve`
+1. `cd backend && node src/server.js` (or `npm run dev` for nodemon)
+2. `cd frontend && npx ng serve`
+
+No external database service needed — SQLite is embedded.
 
 ### Lint
 
 - Backend: `cd backend && npx eslint src/`
-- Frontend: `cd frontend && npx ng lint` (0 errors expected; warnings for accessibility are acceptable)
+- Frontend: `cd frontend && npx ng lint`
 
 ### Build
 
@@ -39,8 +39,10 @@
 
 ### Key caveats
 
-- The activity_logs table has a FK to users; activity logging must happen AFTER the user insert transaction commits (not inside the same transaction for new user creation).
-- Frontend services call `http://localhost:3000/api/*` directly. No proxy config file is set up; both servers must run simultaneously.
-- Backend uses `pg` pool with max 20 connections. PostgreSQL `max_connections` default (100) is sufficient.
+- All DB calls in controllers/services are synchronous (better-sqlite3). Route handlers remain `async (req, res)` for Express compatibility but DB operations do not use await.
+- Transactions use `db.transaction(() => { ... })()` pattern. Errors thrown inside automatically trigger rollback.
+- Boolean columns (`is_active`, `is_read`) use INTEGER 0/1 in SQLite.
+- `datetime('now')` is used for timestamps in SQLite (stored as TEXT in ISO format).
+- Frontend services call `http://localhost:3000/api/*` directly. Both servers must run simultaneously.
 - File uploads go to `backend/uploads/` directory which is served statically.
 - Email sending will fail silently if SMTP credentials are not configured (logs to email_logs table with status='failed').
