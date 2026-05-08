@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable, tap } from 'rxjs';
 import { io, Socket } from 'socket.io-client';
@@ -6,22 +6,22 @@ import { Notification } from '../models/interfaces';
 
 @Injectable({ providedIn: 'root' })
 export class NotificationService {
+  private http = inject(HttpClient);
+
   private apiUrl = 'http://localhost:3000/api/notifications';
   private socket: Socket | null = null;
 
   private unreadCountSubject = new BehaviorSubject<number>(0);
   unreadCount$ = this.unreadCountSubject.asObservable();
 
-  constructor(private http: HttpClient) {}
-
   getNotifications(): Observable<Notification[]> {
     return this.http.get<Notification[]>(this.apiUrl);
   }
 
   getUnreadCount(): Observable<{ count: number }> {
-    return this.http.get<{ count: number }>(`${this.apiUrl}/unread-count`).pipe(
-      tap((response) => this.unreadCountSubject.next(response.count))
-    );
+    return this.http
+      .get<{ count: number }>(`${this.apiUrl}/unread-count`)
+      .pipe(tap((response) => this.unreadCountSubject.next(response.count)));
   }
 
   markAsRead(id: number): Observable<Notification> {
@@ -34,7 +34,7 @@ export class NotificationService {
 
   connectSocket(token: string): void {
     this.socket = io('ws://localhost:3000', {
-      auth: { token }
+      auth: { token },
     });
 
     this.socket.on('notification', () => {

@@ -1,19 +1,27 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { Claim } from '../models/interfaces';
 
 @Injectable({ providedIn: 'root' })
 export class ClaimsService {
+  private http = inject(HttpClient);
+
   private apiUrl = 'http://localhost:3000/api/claims';
 
-  constructor(private http: HttpClient) {}
-
-  createClaim(data: { lost_item_id?: number; found_item_id?: number; proof: string }): Observable<Claim> {
+  createClaim(data: {
+    lost_item_id?: number;
+    found_item_id?: number;
+    proof: string;
+  }): Observable<Claim> {
     return this.http.post<Claim>(this.apiUrl, data);
   }
 
-  getClaims(params?: { status?: string; page?: number; limit?: number }): Observable<{ claims: Claim[]; total: number }> {
+  getClaims(params?: {
+    status?: string;
+    page?: number;
+    limit?: number;
+  }): Observable<{ claims: Claim[]; total: number }> {
     let httpParams = new HttpParams();
     if (params) {
       if (params.status) httpParams = httpParams.set('status', params.status);

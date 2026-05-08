@@ -4,15 +4,16 @@ const matchingService = require('../services/matching.service');
 
 const getLostItems = async (req, res) => {
   try {
-    const { category_id, status, search, page = 1, limit = 20 } = req.query;
+    const { category_id, category, status, search, page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
     const conditions = [];
     const params = [];
     let paramIndex = 1;
 
-    if (category_id) {
+    const catFilter = category_id || category;
+    if (catFilter) {
       conditions.push(`li.category_id = $${paramIndex++}`);
-      params.push(category_id);
+      params.push(catFilter);
     }
     if (status) {
       conditions.push(`li.status = $${paramIndex++}`);
@@ -165,15 +166,16 @@ const updateLostItem = async (req, res) => {
 
 const getFoundItems = async (req, res) => {
   try {
-    const { category_id, status, search, page = 1, limit = 20 } = req.query;
+    const { category_id, category, status, search, page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
     const conditions = [];
     const params = [];
     let paramIndex = 1;
 
-    if (category_id) {
+    const catFilter = category_id || category;
+    if (catFilter) {
       conditions.push(`fi.category_id = $${paramIndex++}`);
-      params.push(category_id);
+      params.push(catFilter);
     }
     if (status) {
       conditions.push(`fi.status = $${paramIndex++}`);

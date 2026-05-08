@@ -1,6 +1,12 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ReactiveFormsModule, FormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
+import {
+  ReactiveFormsModule,
+  FormsModule,
+  FormBuilder,
+  FormGroup,
+  Validators,
+} from '@angular/forms';
 import { RouterLink, Router } from '@angular/router';
 import { ItemsService } from '../../services/items.service';
 import { AuthService } from '../../services/auth.service';
@@ -11,9 +17,14 @@ import { LostItem, Category } from '../../models/interfaces';
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, FormsModule, RouterLink],
   templateUrl: './lost-items.component.html',
-  styleUrl: './lost-items.component.scss'
+  styleUrl: './lost-items.component.scss',
 })
 export class LostItemsComponent implements OnInit {
+  private itemsService = inject(ItemsService);
+  private authService = inject(AuthService);
+  private fb = inject(FormBuilder);
+  private router = inject(Router);
+
   lostItems: LostItem[] = [];
   categories: Category[] = [];
   showReportForm = false;
@@ -24,19 +35,14 @@ export class LostItemsComponent implements OnInit {
   filterStatus = '';
   searchQuery = '';
 
-  constructor(
-    private itemsService: ItemsService,
-    private authService: AuthService,
-    private fb: FormBuilder,
-    private router: Router
-  ) {
+  constructor() {
     this.reportForm = this.fb.group({
       item_name: ['', [Validators.required]],
       category_id: ['', [Validators.required]],
       description: ['', [Validators.required]],
       location: ['', [Validators.required]],
       date_lost: ['', [Validators.required]],
-      contact_info: ['']
+      contact_info: [''],
     });
   }
 
@@ -57,14 +63,16 @@ export class LostItemsComponent implements OnInit {
         this.lostItems = res.items;
         this.isLoading = false;
       },
-      error: () => { this.isLoading = false; }
+      error: () => {
+        this.isLoading = false;
+      },
     });
   }
 
   loadCategories(): void {
     this.itemsService.getCategories().subscribe({
-      next: (cats) => this.categories = cats,
-      error: () => {}
+      next: (cats) => (this.categories = cats),
+      error: () => {},
     });
   }
 
@@ -90,7 +98,7 @@ export class LostItemsComponent implements OnInit {
         this.reportForm.reset();
         this.loadItems();
       },
-      error: () => {}
+      error: () => {},
     });
   }
 

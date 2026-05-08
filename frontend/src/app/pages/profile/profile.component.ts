@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { RouterLink, Router } from '@angular/router';
@@ -10,33 +10,33 @@ import { User } from '../../models/interfaces';
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, RouterLink],
   templateUrl: './profile.component.html',
-  styleUrl: './profile.component.scss'
+  styleUrl: './profile.component.scss',
 })
 export class ProfileComponent implements OnInit {
+  private authService = inject(AuthService);
+  private fb = inject(FormBuilder);
+  private router = inject(Router);
+
   user: User | null = null;
   profileForm: FormGroup;
   isEditing = false;
   isLoading = false;
   successMessage = '';
 
-  constructor(
-    private authService: AuthService,
-    private fb: FormBuilder,
-    private router: Router
-  ) {
+  constructor() {
     this.profileForm = this.fb.group({
       full_name: ['', [Validators.required]],
-      phone: ['']
+      phone: [''],
     });
   }
 
   ngOnInit(): void {
-    this.authService.currentUser$.subscribe(user => {
+    this.authService.currentUser$.subscribe((user) => {
       this.user = user;
       if (user) {
         this.profileForm.patchValue({
           full_name: user.full_name,
-          phone: user.phone || ''
+          phone: user.phone || '',
         });
       }
     });
@@ -46,10 +46,10 @@ export class ProfileComponent implements OnInit {
         this.user = user;
         this.profileForm.patchValue({
           full_name: user.full_name,
-          phone: user.phone || ''
+          phone: user.phone || '',
         });
       },
-      error: () => {}
+      error: () => {},
     });
   }
 
@@ -69,7 +69,9 @@ export class ProfileComponent implements OnInit {
         this.isLoading = false;
         this.successMessage = 'Profile updated successfully!';
       },
-      error: () => { this.isLoading = false; }
+      error: () => {
+        this.isLoading = false;
+      },
     });
   }
 

@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink, Router } from '@angular/router';
 import { NotificationService } from '../../services/notification.service';
@@ -10,17 +10,15 @@ import { Notification } from '../../models/interfaces';
   standalone: true,
   imports: [CommonModule, RouterLink],
   templateUrl: './notifications.component.html',
-  styleUrl: './notifications.component.scss'
+  styleUrl: './notifications.component.scss',
 })
 export class NotificationsComponent implements OnInit {
+  private notificationService = inject(NotificationService);
+  private authService = inject(AuthService);
+  private router = inject(Router);
+
   notifications: Notification[] = [];
   isLoading = false;
-
-  constructor(
-    private notificationService: NotificationService,
-    private authService: AuthService,
-    private router: Router
-  ) {}
 
   ngOnInit(): void {
     this.loadNotifications();
@@ -33,37 +31,45 @@ export class NotificationsComponent implements OnInit {
         this.notifications = notifications;
         this.isLoading = false;
       },
-      error: () => { this.isLoading = false; }
+      error: () => {
+        this.isLoading = false;
+      },
     });
   }
 
   markAsRead(id: number): void {
     this.notificationService.markAsRead(id).subscribe({
       next: () => {
-        const notification = this.notifications.find(n => n.id === id);
+        const notification = this.notifications.find((n) => n.id === id);
         if (notification) notification.is_read = true;
       },
-      error: () => {}
+      error: () => {},
     });
   }
 
   markAllAsRead(): void {
     this.notificationService.markAllAsRead().subscribe({
       next: () => {
-        this.notifications.forEach(n => n.is_read = true);
+        this.notifications.forEach((n) => (n.is_read = true));
       },
-      error: () => {}
+      error: () => {},
     });
   }
 
   getTypeIcon(type: string): string {
     switch (type) {
-      case 'match': return '🔗';
-      case 'claim': return '📝';
-      case 'approved': return '✅';
-      case 'rejected': return '❌';
-      case 'alert': return '🔔';
-      default: return '📨';
+      case 'match':
+        return '🔗';
+      case 'claim':
+        return '📝';
+      case 'approved':
+        return '✅';
+      case 'rejected':
+        return '❌';
+      case 'alert':
+        return '🔔';
+      default:
+        return '📨';
     }
   }
 

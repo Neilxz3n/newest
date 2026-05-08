@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { RouterLink, Router } from '@angular/router';
@@ -11,9 +11,14 @@ import { User, Announcement } from '../../models/interfaces';
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, RouterLink],
   templateUrl: './admin.component.html',
-  styleUrl: './admin.component.scss'
+  styleUrl: './admin.component.scss',
 })
 export class AdminComponent implements OnInit {
+  private adminService = inject(AdminService);
+  private authService = inject(AuthService);
+  private fb = inject(FormBuilder);
+  private router = inject(Router);
+
   activeTab = 'users';
   users: User[] = [];
   announcements: Announcement[] = [];
@@ -22,16 +27,11 @@ export class AdminComponent implements OnInit {
 
   announcementForm: FormGroup;
 
-  constructor(
-    private adminService: AdminService,
-    private authService: AuthService,
-    private fb: FormBuilder,
-    private router: Router
-  ) {
+  constructor() {
     this.announcementForm = this.fb.group({
       title: ['', [Validators.required]],
       content: ['', [Validators.required]],
-      priority: ['normal', [Validators.required]]
+      priority: ['normal', [Validators.required]],
     });
   }
 
@@ -47,29 +47,29 @@ export class AdminComponent implements OnInit {
 
   loadUsers(): void {
     this.adminService.getUsers().subscribe({
-      next: (users) => this.users = users,
-      error: () => {}
+      next: (users) => (this.users = users),
+      error: () => {},
     });
   }
 
   loadAnnouncements(): void {
     this.adminService.getAnnouncements().subscribe({
-      next: (announcements) => this.announcements = announcements,
-      error: () => {}
+      next: (announcements) => (this.announcements = announcements),
+      error: () => {},
     });
   }
 
   loadActivityLogs(): void {
     this.adminService.getActivityLogs().subscribe({
-      next: (logs) => this.activityLogs = logs,
-      error: () => {}
+      next: (logs) => (this.activityLogs = logs),
+      error: () => {},
     });
   }
 
   updateRole(userId: number, role: string): void {
     this.adminService.updateUserRole(userId, role).subscribe({
       next: () => this.loadUsers(),
-      error: () => {}
+      error: () => {},
     });
   }
 
@@ -81,14 +81,14 @@ export class AdminComponent implements OnInit {
         this.announcementForm.reset({ priority: 'normal' });
         this.loadAnnouncements();
       },
-      error: () => {}
+      error: () => {},
     });
   }
 
   deleteAnnouncement(id: number): void {
     this.adminService.deleteAnnouncement(id).subscribe({
       next: () => this.loadAnnouncements(),
-      error: () => {}
+      error: () => {},
     });
   }
 

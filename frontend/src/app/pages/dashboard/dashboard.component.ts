@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink, Router } from '@angular/router';
 import { AdminService } from '../../services/admin.service';
@@ -11,9 +11,14 @@ import { User, DashboardStats } from '../../models/interfaces';
   standalone: true,
   imports: [CommonModule, RouterLink],
   templateUrl: './dashboard.component.html',
-  styleUrl: './dashboard.component.scss'
+  styleUrl: './dashboard.component.scss',
 })
 export class DashboardComponent implements OnInit {
+  private adminService = inject(AdminService);
+  private authService = inject(AuthService);
+  private notificationService = inject(NotificationService);
+  private router = inject(Router);
+
   user: User | null = null;
   stats: DashboardStats = {
     totalLost: 0,
@@ -21,30 +26,23 @@ export class DashboardComponent implements OnInit {
     totalClaimed: 0,
     pendingClaims: 0,
     totalUsers: 0,
-    recentActivities: []
+    recentActivities: [],
   };
   unreadCount = 0;
 
-  constructor(
-    private adminService: AdminService,
-    private authService: AuthService,
-    private notificationService: NotificationService,
-    private router: Router
-  ) {}
-
   ngOnInit(): void {
-    this.authService.currentUser$.subscribe(user => {
+    this.authService.currentUser$.subscribe((user) => {
       this.user = user;
     });
 
     this.adminService.getDashboardStats().subscribe({
-      next: (stats) => this.stats = stats,
-      error: () => {}
+      next: (stats) => (this.stats = stats),
+      error: () => {},
     });
 
     this.notificationService.getUnreadCount().subscribe({
-      next: (res) => this.unreadCount = res.count,
-      error: () => {}
+      next: (res) => (this.unreadCount = res.count),
+      error: () => {},
     });
   }
 

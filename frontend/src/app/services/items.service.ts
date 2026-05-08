@@ -1,13 +1,13 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { LostItem, FoundItem, Category, ItemMatch } from '../models/interfaces';
 
 @Injectable({ providedIn: 'root' })
 export class ItemsService {
-  private apiUrl = 'http://localhost:3000/api/items';
+  private http = inject(HttpClient);
 
-  constructor(private http: HttpClient) {}
+  private apiUrl = 'http://localhost:3000/api/items';
 
   getLostItems(params?: {
     category?: number;
@@ -24,7 +24,9 @@ export class ItemsService {
       if (params.page) httpParams = httpParams.set('page', params.page.toString());
       if (params.limit) httpParams = httpParams.set('limit', params.limit.toString());
     }
-    return this.http.get<{ items: LostItem[]; total: number }>(`${this.apiUrl}/lost`, { params: httpParams });
+    return this.http.get<{ items: LostItem[]; total: number }>(`${this.apiUrl}/lost`, {
+      params: httpParams,
+    });
   }
 
   createLostItem(formData: FormData): Observable<LostItem> {
@@ -50,7 +52,9 @@ export class ItemsService {
       if (params.page) httpParams = httpParams.set('page', params.page.toString());
       if (params.limit) httpParams = httpParams.set('limit', params.limit.toString());
     }
-    return this.http.get<{ items: FoundItem[]; total: number }>(`${this.apiUrl}/found`, { params: httpParams });
+    return this.http.get<{ items: FoundItem[]; total: number }>(`${this.apiUrl}/found`, {
+      params: httpParams,
+    });
   }
 
   createFoundItem(formData: FormData): Observable<FoundItem> {

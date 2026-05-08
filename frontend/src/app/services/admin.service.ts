@@ -1,13 +1,13 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { DashboardStats, User, Announcement } from '../models/interfaces';
 
 @Injectable({ providedIn: 'root' })
 export class AdminService {
-  private apiUrl = 'http://localhost:3000/api/admin';
+  private http = inject(HttpClient);
 
-  constructor(private http: HttpClient) {}
+  private apiUrl = 'http://localhost:3000/api/admin';
 
   getDashboardStats(): Observable<DashboardStats> {
     return this.http.get<DashboardStats>(`${this.apiUrl}/dashboard`);
@@ -29,7 +29,11 @@ export class AdminService {
     return this.http.get<Announcement[]>(`${this.apiUrl}/announcements`);
   }
 
-  createAnnouncement(data: { title: string; content: string; priority: string }): Observable<Announcement> {
+  createAnnouncement(data: {
+    title: string;
+    content: string;
+    priority: string;
+  }): Observable<Announcement> {
     return this.http.post<Announcement>(`${this.apiUrl}/announcements`, data);
   }
 

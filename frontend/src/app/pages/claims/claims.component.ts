@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink, Router } from '@angular/router';
@@ -11,22 +11,20 @@ import { Claim, User } from '../../models/interfaces';
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './claims.component.html',
-  styleUrl: './claims.component.scss'
+  styleUrl: './claims.component.scss',
 })
 export class ClaimsComponent implements OnInit {
+  private claimsService = inject(ClaimsService);
+  private authService = inject(AuthService);
+  private router = inject(Router);
+
   claims: Claim[] = [];
   user: User | null = null;
   isLoading = false;
   filterStatus = '';
 
-  constructor(
-    private claimsService: ClaimsService,
-    private authService: AuthService,
-    private router: Router
-  ) {}
-
   ngOnInit(): void {
-    this.authService.currentUser$.subscribe(user => this.user = user);
+    this.authService.currentUser$.subscribe((user) => (this.user = user));
     this.loadClaims();
   }
 
@@ -44,21 +42,23 @@ export class ClaimsComponent implements OnInit {
         this.claims = res.claims;
         this.isLoading = false;
       },
-      error: () => { this.isLoading = false; }
+      error: () => {
+        this.isLoading = false;
+      },
     });
   }
 
   approveClaim(id: number): void {
     this.claimsService.approveClaim(id).subscribe({
       next: () => this.loadClaims(),
-      error: () => {}
+      error: () => {},
     });
   }
 
   rejectClaim(id: number): void {
     this.claimsService.rejectClaim(id).subscribe({
       next: () => this.loadClaims(),
-      error: () => {}
+      error: () => {},
     });
   }
 

@@ -25,11 +25,25 @@ const getDashboardStats = async (req, res) => {
     const claims = {};
     claimsResult.rows.forEach(row => { claims[row.status] = parseInt(row.count); });
 
+    const totalLost = Object.values(lostItems).reduce((a, b) => a + b, 0);
+    const totalFound = Object.values(foundItems).reduce((a, b) => a + b, 0);
+    const totalClaimed = (lostItems.claimed || 0) + (foundItems.claimed || 0);
+    const pendingClaims = claims.pending || 0;
+
+    const activitiesResult = await pool.query(
+      `SELECT al.*, u.full_name FROM activity_logs al LEFT JOIN users u ON al.user_id = u.id ORDER BY al.created_at DESC LIMIT 10`
+    );
+
     res.json({
+      totalLost,
+      totalFound,
+      totalClaimed,
+      pendingClaims,
+      totalUsers: parseInt(usersResult.rows[0].total),
+      recentActivities: activitiesResult.rows,
       lostItems,
       foundItems,
       claims,
-      totalUsers: parseInt(usersResult.rows[0].total),
     });
   } catch (error) {
     console.error('Dashboard stats error:', error);

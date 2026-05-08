@@ -1,6 +1,12 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ReactiveFormsModule, FormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
+import {
+  ReactiveFormsModule,
+  FormsModule,
+  FormBuilder,
+  FormGroup,
+  Validators,
+} from '@angular/forms';
 import { RouterLink, Router } from '@angular/router';
 import { ItemsService } from '../../services/items.service';
 import { AuthService } from '../../services/auth.service';
@@ -11,9 +17,14 @@ import { FoundItem, Category } from '../../models/interfaces';
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, FormsModule, RouterLink],
   templateUrl: './found-items.component.html',
-  styleUrl: './found-items.component.scss'
+  styleUrl: './found-items.component.scss',
 })
 export class FoundItemsComponent implements OnInit {
+  private itemsService = inject(ItemsService);
+  private authService = inject(AuthService);
+  private fb = inject(FormBuilder);
+  private router = inject(Router);
+
   foundItems: FoundItem[] = [];
   categories: Category[] = [];
   showReportForm = false;
@@ -24,12 +35,7 @@ export class FoundItemsComponent implements OnInit {
   filterStatus = '';
   searchQuery = '';
 
-  constructor(
-    private itemsService: ItemsService,
-    private authService: AuthService,
-    private fb: FormBuilder,
-    private router: Router
-  ) {
+  constructor() {
     this.reportForm = this.fb.group({
       item_name: ['', [Validators.required]],
       category_id: ['', [Validators.required]],
@@ -37,7 +43,7 @@ export class FoundItemsComponent implements OnInit {
       location: ['', [Validators.required]],
       pickup_location: ['', [Validators.required]],
       date_found: ['', [Validators.required]],
-      verification_notes: ['']
+      verification_notes: [''],
     });
   }
 
@@ -58,14 +64,16 @@ export class FoundItemsComponent implements OnInit {
         this.foundItems = res.items;
         this.isLoading = false;
       },
-      error: () => { this.isLoading = false; }
+      error: () => {
+        this.isLoading = false;
+      },
     });
   }
 
   loadCategories(): void {
     this.itemsService.getCategories().subscribe({
-      next: (cats) => this.categories = cats,
-      error: () => {}
+      next: (cats) => (this.categories = cats),
+      error: () => {},
     });
   }
 
@@ -91,7 +99,7 @@ export class FoundItemsComponent implements OnInit {
         this.reportForm.reset();
         this.loadItems();
       },
-      error: () => {}
+      error: () => {},
     });
   }
 

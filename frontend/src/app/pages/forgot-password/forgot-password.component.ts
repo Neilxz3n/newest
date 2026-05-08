@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -9,20 +9,20 @@ import { AuthService } from '../../services/auth.service';
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, RouterLink],
   templateUrl: './forgot-password.component.html',
-  styleUrl: './forgot-password.component.scss'
+  styleUrl: './forgot-password.component.scss',
 })
 export class ForgotPasswordComponent {
+  private fb = inject(FormBuilder);
+  private authService = inject(AuthService);
+
   forgotForm: FormGroup;
   isLoading = false;
   successMessage = '';
   errorMessage = '';
 
-  constructor(
-    private fb: FormBuilder,
-    private authService: AuthService
-  ) {
+  constructor() {
     this.forgotForm = this.fb.group({
-      email: ['', [Validators.required, Validators.email]]
+      email: ['', [Validators.required, Validators.email]],
     });
   }
 
@@ -41,7 +41,7 @@ export class ForgotPasswordComponent {
       error: (err) => {
         this.isLoading = false;
         this.errorMessage = err.error?.message || 'Failed to send reset link. Please try again.';
-      }
+      },
     });
   }
 }
