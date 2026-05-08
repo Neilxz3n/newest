@@ -1,226 +1,163 @@
 -- Campus Lost & Found Management System
--- Database Schema - PostgreSQL
+-- Database Schema - SQLite
 -- Demonstrates ACID-compliant transaction management
 
--- Drop tables if exist (for fresh setup)
-DROP TABLE IF EXISTS email_logs CASCADE;
-DROP TABLE IF EXISTS activity_logs CASCADE;
-DROP TABLE IF EXISTS notifications CASCADE;
-DROP TABLE IF EXISTS item_matches CASCADE;
-DROP TABLE IF EXISTS claims CASCADE;
-DROP TABLE IF EXISTS found_items CASCADE;
-DROP TABLE IF EXISTS lost_items CASCADE;
-DROP TABLE IF EXISTS announcements CASCADE;
-DROP TABLE IF EXISTS categories CASCADE;
-DROP TABLE IF EXISTS users CASCADE;
-DROP TABLE IF EXISTS departments CASCADE;
-DROP TABLE IF EXISTS campuses CASCADE;
+DROP TABLE IF EXISTS email_logs;
+DROP TABLE IF EXISTS activity_logs;
+DROP TABLE IF EXISTS notifications;
+DROP TABLE IF EXISTS item_matches;
+DROP TABLE IF EXISTS claims;
+DROP TABLE IF EXISTS found_items;
+DROP TABLE IF EXISTS lost_items;
+DROP TABLE IF EXISTS announcements;
+DROP TABLE IF EXISTS categories;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS departments;
+DROP TABLE IF EXISTS campuses;
 
--- ============================================
--- CAMPUSES TABLE
--- ============================================
 CREATE TABLE campuses (
-    id SERIAL PRIMARY KEY,
-    campus_name VARCHAR(200) NOT NULL UNIQUE,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    campus_name TEXT NOT NULL UNIQUE,
     address TEXT NOT NULL,
-    phone VARCHAR(20),
-    email VARCHAR(100),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    phone TEXT,
+    email TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
 );
 
--- ============================================
--- DEPARTMENTS TABLE
--- ============================================
 CREATE TABLE departments (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(200) NOT NULL,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
     campus_id INTEGER NOT NULL REFERENCES campuses(id) ON DELETE CASCADE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(name, campus_id)
 );
 
--- ============================================
--- USERS TABLE
--- ============================================
 CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    full_name VARCHAR(150) NOT NULL,
-    email VARCHAR(255) NOT NULL UNIQUE,
-    password VARCHAR(255) NOT NULL,
-    role VARCHAR(20) NOT NULL DEFAULT 'student' CHECK (role IN ('student', 'faculty', 'admin')),
-    student_id VARCHAR(50),
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    full_name TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    password TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'student' CHECK (role IN ('student', 'faculty', 'admin')),
+    student_id TEXT,
     department_id INTEGER REFERENCES departments(id) ON DELETE SET NULL,
     campus_id INTEGER REFERENCES campuses(id) ON DELETE SET NULL,
-    avatar VARCHAR(500),
-    phone VARCHAR(20),
-    is_active BOOLEAN DEFAULT TRUE,
-    reset_token VARCHAR(255),
-    reset_token_expires TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    avatar TEXT,
+    phone TEXT,
+    is_active INTEGER DEFAULT 1,
+    reset_token TEXT,
+    reset_token_expires TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
 );
 
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_role ON users(role);
-
--- ============================================
--- CATEGORIES TABLE
--- ============================================
 CREATE TABLE categories (
-    id SERIAL PRIMARY KEY,
-    category_name VARCHAR(100) NOT NULL UNIQUE,
-    icon VARCHAR(50),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    category_name TEXT NOT NULL UNIQUE,
+    icon TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
 );
 
--- ============================================
--- LOST ITEMS TABLE
--- ============================================
 CREATE TABLE lost_items (
-    id SERIAL PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,
-    item_name VARCHAR(200) NOT NULL,
+    category_id INTEGER NOT NULL REFERENCES categories(id),
+    item_name TEXT NOT NULL,
     description TEXT NOT NULL,
-    image VARCHAR(500),
-    location VARCHAR(300) NOT NULL,
-    date_lost DATE NOT NULL,
-    status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'matched', 'claimed', 'archived')),
+    image TEXT,
+    location TEXT NOT NULL,
+    date_lost TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'matched', 'claimed', 'archived')),
     campus_id INTEGER REFERENCES campuses(id),
     department_id INTEGER REFERENCES departments(id),
-    contact_info VARCHAR(200),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    contact_info TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
 );
 
-CREATE INDEX idx_lost_items_status ON lost_items(status);
-CREATE INDEX idx_lost_items_category ON lost_items(category_id);
-CREATE INDEX idx_lost_items_user ON lost_items(user_id);
-CREATE INDEX idx_lost_items_date ON lost_items(date_lost);
-
--- ============================================
--- FOUND ITEMS TABLE
--- ============================================
 CREATE TABLE found_items (
-    id SERIAL PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,
-    item_name VARCHAR(200) NOT NULL,
+    category_id INTEGER NOT NULL REFERENCES categories(id),
+    item_name TEXT NOT NULL,
     description TEXT NOT NULL,
-    image VARCHAR(500),
-    location VARCHAR(300) NOT NULL,
-    pickup_location VARCHAR(300),
-    date_found DATE NOT NULL,
-    status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'matched', 'claimed', 'archived')),
+    image TEXT,
+    location TEXT NOT NULL,
+    pickup_location TEXT,
+    date_found TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'matched', 'claimed', 'archived')),
     campus_id INTEGER REFERENCES campuses(id),
     department_id INTEGER REFERENCES departments(id),
     verification_notes TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
 );
 
-CREATE INDEX idx_found_items_status ON found_items(status);
-CREATE INDEX idx_found_items_category ON found_items(category_id);
-CREATE INDEX idx_found_items_user ON found_items(user_id);
-CREATE INDEX idx_found_items_date ON found_items(date_found);
-
--- ============================================
--- CLAIMS TABLE
--- ============================================
 CREATE TABLE claims (
-    id SERIAL PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     lost_item_id INTEGER REFERENCES lost_items(id) ON DELETE SET NULL,
     found_item_id INTEGER REFERENCES found_items(id) ON DELETE SET NULL,
     claimant_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     proof TEXT NOT NULL,
-    status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
     approved_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     admin_notes TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT chk_claim_item CHECK (lost_item_id IS NOT NULL OR found_item_id IS NOT NULL)
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
 );
 
-CREATE INDEX idx_claims_status ON claims(status);
-CREATE INDEX idx_claims_claimant ON claims(claimant_id);
-
--- ============================================
--- ITEM MATCHES TABLE
--- ============================================
 CREATE TABLE item_matches (
-    id SERIAL PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     lost_item_id INTEGER NOT NULL REFERENCES lost_items(id) ON DELETE CASCADE,
     found_item_id INTEGER NOT NULL REFERENCES found_items(id) ON DELETE CASCADE,
-    confidence_score DECIMAL(5,2) NOT NULL CHECK (confidence_score >= 0 AND confidence_score <= 100),
+    confidence_score REAL NOT NULL CHECK (confidence_score >= 0 AND confidence_score <= 100),
     match_reason TEXT,
-    is_confirmed BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_confirmed INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(lost_item_id, found_item_id)
 );
 
-CREATE INDEX idx_matches_confidence ON item_matches(confidence_score DESC);
-
--- ============================================
--- NOTIFICATIONS TABLE
--- ============================================
 CREATE TABLE notifications (
-    id SERIAL PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    title VARCHAR(200) NOT NULL,
+    title TEXT NOT NULL,
     message TEXT NOT NULL,
-    type VARCHAR(50) NOT NULL CHECK (type IN ('match_found', 'claim_approved', 'claim_rejected', 'status_update', 'announcement', 'system')),
-    is_read BOOLEAN DEFAULT FALSE,
+    type TEXT NOT NULL CHECK (type IN ('match_found', 'claim_approved', 'claim_rejected', 'status_update', 'announcement', 'system')),
+    is_read INTEGER DEFAULT 0,
     reference_id INTEGER,
-    reference_type VARCHAR(50),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    reference_type TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
 );
 
-CREATE INDEX idx_notifications_user ON notifications(user_id, is_read);
-
--- ============================================
--- ACTIVITY LOGS TABLE
--- ============================================
 CREATE TABLE activity_logs (
-    id SERIAL PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-    activity VARCHAR(500) NOT NULL,
-    entity_type VARCHAR(50),
+    activity TEXT NOT NULL,
+    entity_type TEXT,
     entity_id INTEGER,
-    ip_address VARCHAR(45),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ip_address TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
 );
 
-CREATE INDEX idx_activity_logs_user ON activity_logs(user_id);
-CREATE INDEX idx_activity_logs_date ON activity_logs(created_at);
-
--- ============================================
--- EMAIL LOGS TABLE
--- ============================================
 CREATE TABLE email_logs (
-    id SERIAL PRIMARY KEY,
-    recipient_email VARCHAR(255) NOT NULL,
-    subject VARCHAR(300) NOT NULL,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    recipient_email TEXT NOT NULL,
+    subject TEXT NOT NULL,
     body TEXT,
-    status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'failed')),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'failed')),
     error_message TEXT,
-    sent_at TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    sent_at TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
 );
 
-CREATE INDEX idx_email_logs_status ON email_logs(status);
-
--- ============================================
--- ANNOUNCEMENTS TABLE
--- ============================================
 CREATE TABLE announcements (
-    id SERIAL PRIMARY KEY,
-    title VARCHAR(300) NOT NULL,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
     content TEXT NOT NULL,
-    priority VARCHAR(20) DEFAULT 'normal' CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
-    is_active BOOLEAN DEFAULT TRUE,
+    priority TEXT DEFAULT 'normal' CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
+    is_active INTEGER DEFAULT 1,
     created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     campus_id INTEGER REFERENCES campuses(id),
-    expires_at TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    expires_at TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
 );

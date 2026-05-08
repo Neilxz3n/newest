@@ -1,19 +1,16 @@
-const { Pool } = require('pg');
-require('dotenv').config();
+const Database = require('better-sqlite3');
+const path = require('path');
+const fs = require('fs');
 
-const pool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT) || 5432,
-  user: process.env.DB_USER || 'campus_admin',
-  password: process.env.DB_PASSWORD || 'campus_secret_2024',
-  database: process.env.DB_NAME || 'campus_lost_found',
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-});
+const dbDir = path.join(__dirname, '../../data');
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
 
-pool.on('error', (err) => {
-  console.error('Unexpected database pool error:', err);
-});
+const dbPath = path.join(dbDir, 'campus_lost_found.db');
+const db = new Database(dbPath);
 
-module.exports = pool;
+db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
+
+module.exports = db;

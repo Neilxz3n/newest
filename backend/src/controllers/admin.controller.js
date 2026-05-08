@@ -1,46 +1,46 @@
-const pool = require('../config/database');
+const db = require('../config/database');
 const activityService = require('../services/activity.service');
 
 const getDashboardStats = async (req, res) => {
   try {
-    const lostItemsResult = await pool.query(
-      `SELECT status, COUNT(*) as count FROM lost_items GROUP BY status`
-    );
-    const foundItemsResult = await pool.query(
-      `SELECT status, COUNT(*) as count FROM found_items GROUP BY status`
-    );
-    const claimsResult = await pool.query(
-      `SELECT status, COUNT(*) as count FROM claims GROUP BY status`
-    );
-    const usersResult = await pool.query(
-      `SELECT COUNT(*) as total FROM users WHERE is_active = true`
-    );
+    const lostItemsRows = db.prepare(
+      'SELECT status, COUNT(*) as count FROM lost_items GROUP BY status'
+    ).all();
+    const foundItemsRows = db.prepare(
+      'SELECT status, COUNT(*) as count FROM found_items GROUP BY status'
+    ).all();
+    const claimsRows = db.prepare(
+      'SELECT status, COUNT(*) as count FROM claims GROUP BY status'
+    ).all();
+    const usersRow = db.prepare(
+      'SELECT COUNT(*) as total FROM users WHERE is_active = 1'
+    ).get();
 
     const lostItems = {};
-    lostItemsResult.rows.forEach(row => { lostItems[row.status] = parseInt(row.count); });
+    lostItemsRows.forEach(row => { lostItems[row.status] = row.count; });
 
     const foundItems = {};
-    foundItemsResult.rows.forEach(row => { foundItems[row.status] = parseInt(row.count); });
+    foundItemsRows.forEach(row => { foundItems[row.status] = row.count; });
 
     const claims = {};
-    claimsResult.rows.forEach(row => { claims[row.status] = parseInt(row.count); });
+    claimsRows.forEach(row => { claims[row.status] = row.count; });
 
     const totalLost = Object.values(lostItems).reduce((a, b) => a + b, 0);
     const totalFound = Object.values(foundItems).reduce((a, b) => a + b, 0);
     const totalClaimed = (lostItems.claimed || 0) + (foundItems.claimed || 0);
     const pendingClaims = claims.pending || 0;
 
-    const activitiesResult = await pool.query(
+    const recentActivities = db.prepare(
       `SELECT al.*, u.full_name FROM activity_logs al LEFT JOIN users u ON al.user_id = u.id ORDER BY al.created_at DESC LIMIT 10`
-    );
+    ).all();
 
     res.json({
       totalLost,
       totalFound,
       totalClaimed,
       pendingClaims,
-      totalUsers: parseInt(usersResult.rows[0].total),
-      recentActivities: activitiesResult.rows,
+      totalUsers: usersRow.total,
+      recentActivities,
       lostItems,
       foundItems,
       claims,
@@ -57,27 +57,23 @@ const getUsers = async (req, res) => {
     const offset = (page - 1) * limit;
     const conditions = [];
     const params = [];
-    let paramIndex = 1;
 
     if (role) {
-      conditions.push(`u.role = $${paramIndex++}`);
+      conditions.push('u.role = ?');
       params.push(role);
     }
     if (search) {
-      conditions.push(`(u.full_name ILIKE $${paramIndex} OR u.email ILIKE $${paramIndex})`);
-      params.push(`%${search}%`);
-      paramIndex++;
+      conditions.push('(u.full_name LIKE ? OR u.email LIKE ?)');
+      params.push(`%${search}%`, `%${search}%`);
     }
 
     const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
 
-    const countResult = await pool.query(
-      `SELECT COUNT(*) FROM users u ${whereClause}`,
-      params
-    );
+    const countRow = db.prepare(
+      `SELECT COUNT(*) as count FROM users u ${whereClause}`
+    ).get(...params);
 
-    params.push(limit, offset);
-    const result = await pool.query(
+    const users = db.prepare(
       `SELECT u.id, u.full_name, u.email, u.role, u.student_id, u.phone, u.is_active, u.created_at,
               d.name as department_name, c.campus_name
        FROM users u
@@ -85,13 +81,12 @@ const getUsers = async (req, res) => {
        LEFT JOIN campuses c ON u.campus_id = c.id
        ${whereClause}
        ORDER BY u.created_at DESC
-       LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
-      params
-    );
+       LIMIT ? OFFSET ?`
+    ).all(...params, parseInt(limit), parseInt(offset));
 
     res.json({
-      users: result.rows,
-      total: parseInt(countResult.rows[0].count),
+      users,
+      total: countRow.count,
       page: parseInt(page),
       limit: parseInt(limit),
     });
@@ -110,18 +105,18 @@ const updateUserRole = async (req, res) => {
       return res.status(400).json({ message: 'Invalid role.' });
     }
 
-    const result = await pool.query(
-      `UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2 RETURNING id, full_name, email, role`,
-      [role, id]
-    );
+    const result = db.prepare(
+      'UPDATE users SET role = ?, updated_at = datetime(?) WHERE id = ?'
+    ).run(role, new Date().toISOString(), id);
 
-    if (result.rows.length === 0) {
+    if (result.changes === 0) {
       return res.status(404).json({ message: 'User not found.' });
     }
 
-    await activityService.log(req.user.id, `Updated user #${id} role to ${role}`, 'user', parseInt(id));
+    const user = db.prepare('SELECT id, full_name, email, role FROM users WHERE id = ?').get(id);
+    activityService.log(req.user.id, `Updated user #${id} role to ${role}`, 'user', parseInt(id));
 
-    res.json({ message: 'User role updated', user: result.rows[0] });
+    res.json({ message: 'User role updated', user });
   } catch (error) {
     console.error('Update user role error:', error);
     res.status(500).json({ message: 'Failed to update user role.' });
@@ -133,19 +128,18 @@ const getActivityLogs = async (req, res) => {
     const { page = 1, limit = 50 } = req.query;
     const offset = (page - 1) * limit;
 
-    const countResult = await pool.query('SELECT COUNT(*) FROM activity_logs');
-    const result = await pool.query(
+    const countRow = db.prepare('SELECT COUNT(*) as count FROM activity_logs').get();
+    const logs = db.prepare(
       `SELECT al.*, u.full_name, u.role
        FROM activity_logs al
        LEFT JOIN users u ON al.user_id = u.id
        ORDER BY al.created_at DESC
-       LIMIT $1 OFFSET $2`,
-      [limit, offset]
-    );
+       LIMIT ? OFFSET ?`
+    ).all(parseInt(limit), parseInt(offset));
 
     res.json({
-      logs: result.rows,
-      total: parseInt(countResult.rows[0].count),
+      logs,
+      total: countRow.count,
       page: parseInt(page),
       limit: parseInt(limit),
     });
@@ -161,29 +155,25 @@ const getEmailLogs = async (req, res) => {
     const offset = (page - 1) * limit;
     const conditions = [];
     const params = [];
-    let paramIndex = 1;
 
     if (status) {
-      conditions.push(`status = $${paramIndex++}`);
+      conditions.push('status = ?');
       params.push(status);
     }
 
     const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
 
-    const countResult = await pool.query(
-      `SELECT COUNT(*) FROM email_logs ${whereClause}`,
-      params
-    );
+    const countRow = db.prepare(
+      `SELECT COUNT(*) as count FROM email_logs ${whereClause}`
+    ).get(...params);
 
-    params.push(limit, offset);
-    const result = await pool.query(
-      `SELECT * FROM email_logs ${whereClause} ORDER BY created_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
-      params
-    );
+    const logs = db.prepare(
+      `SELECT * FROM email_logs ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`
+    ).all(...params, parseInt(limit), parseInt(offset));
 
     res.json({
-      logs: result.rows,
-      total: parseInt(countResult.rows[0].count),
+      logs,
+      total: countRow.count,
       page: parseInt(page),
       limit: parseInt(limit),
     });
@@ -195,13 +185,14 @@ const getEmailLogs = async (req, res) => {
 
 const getAnnouncements = async (req, res) => {
   try {
-    const result = await pool.query(
+    const announcements = db.prepare(
       `SELECT a.*, u.full_name as created_by_name
        FROM announcements a
        LEFT JOIN users u ON a.created_by = u.id
        ORDER BY a.created_at DESC`
-    );
-    res.json(result.rows);
+    ).all();
+
+    res.json(announcements);
   } catch (error) {
     console.error('Get announcements error:', error);
     res.status(500).json({ message: 'Failed to fetch announcements.' });
@@ -211,15 +202,16 @@ const getAnnouncements = async (req, res) => {
 const createAnnouncement = async (req, res) => {
   try {
     const { title, content, priority, campus_id, expires_at } = req.body;
-    const result = await pool.query(
+
+    const result = db.prepare(
       `INSERT INTO announcements (title, content, priority, created_by, campus_id, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [title, content, priority || 'normal', req.user.id, campus_id || null, expires_at || null]
-    );
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(title, content, priority || 'normal', req.user.id, campus_id || null, expires_at || null);
 
-    await activityService.log(req.user.id, `Created announcement: ${title}`, 'announcement', result.rows[0].id);
+    const announcement = db.prepare('SELECT * FROM announcements WHERE id = ?').get(result.lastInsertRowid);
+    activityService.log(req.user.id, `Created announcement: ${title}`, 'announcement', announcement.id);
 
-    res.status(201).json({ message: 'Announcement created', announcement: result.rows[0] });
+    res.status(201).json({ message: 'Announcement created', announcement });
   } catch (error) {
     console.error('Create announcement error:', error);
     res.status(500).json({ message: 'Failed to create announcement.' });
@@ -229,13 +221,13 @@ const createAnnouncement = async (req, res) => {
 const deleteAnnouncement = async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await pool.query('DELETE FROM announcements WHERE id = $1 RETURNING id', [id]);
+    const result = db.prepare('DELETE FROM announcements WHERE id = ?').run(id);
 
-    if (result.rows.length === 0) {
+    if (result.changes === 0) {
       return res.status(404).json({ message: 'Announcement not found.' });
     }
 
-    await activityService.log(req.user.id, `Deleted announcement #${id}`, 'announcement', parseInt(id));
+    activityService.log(req.user.id, `Deleted announcement #${id}`, 'announcement', parseInt(id));
 
     res.json({ message: 'Announcement deleted.' });
   } catch (error) {
@@ -246,8 +238,8 @@ const deleteAnnouncement = async (req, res) => {
 
 const getCategories = async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM categories ORDER BY category_name ASC');
-    res.json(result.rows);
+    const categories = db.prepare('SELECT * FROM categories ORDER BY category_name ASC').all();
+    res.json(categories);
   } catch (error) {
     console.error('Get categories error:', error);
     res.status(500).json({ message: 'Failed to fetch categories.' });
@@ -257,18 +249,21 @@ const getCategories = async (req, res) => {
 const createCategory = async (req, res) => {
   try {
     const { category_name, icon } = req.body;
-    const result = await pool.query(
-      `INSERT INTO categories (category_name, icon) VALUES ($1, $2) RETURNING *`,
-      [category_name, icon || null]
-    );
 
-    await activityService.log(req.user.id, `Created category: ${category_name}`, 'category', result.rows[0].id);
-
-    res.status(201).json({ message: 'Category created', category: result.rows[0] });
-  } catch (error) {
-    if (error.code === '23505') {
+    const existing = db.prepare('SELECT id FROM categories WHERE category_name = ?').get(category_name);
+    if (existing) {
       return res.status(400).json({ message: 'Category already exists.' });
     }
+
+    const result = db.prepare(
+      'INSERT INTO categories (category_name, icon) VALUES (?, ?)'
+    ).run(category_name, icon || null);
+
+    const category = db.prepare('SELECT * FROM categories WHERE id = ?').get(result.lastInsertRowid);
+    activityService.log(req.user.id, `Created category: ${category_name}`, 'category', category.id);
+
+    res.status(201).json({ message: 'Category created', category });
+  } catch (error) {
     console.error('Create category error:', error);
     res.status(500).json({ message: 'Failed to create category.' });
   }

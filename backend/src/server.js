@@ -10,6 +10,17 @@ const notificationService = require('./services/notification.service');
 
 require('dotenv').config();
 
+const db = require('./config/database');
+
+const tableCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users'").get();
+if (!tableCheck) {
+  const schemaPath = path.join(__dirname, 'database/schema.sql');
+  if (fs.existsSync(schemaPath)) {
+    const schema = fs.readFileSync(schemaPath, 'utf8');
+    db.exec(schema);
+  }
+}
+
 const app = express();
 const server = http.createServer(app);
 

@@ -1,4 +1,4 @@
-const pool = require('../config/database');
+const db = require('../config/database');
 const activityService = require('../services/activity.service');
 const matchingService = require('../services/matching.service');
 
@@ -8,45 +8,40 @@ const getLostItems = async (req, res) => {
     const offset = (page - 1) * limit;
     const conditions = [];
     const params = [];
-    let paramIndex = 1;
 
     const catFilter = category_id || category;
     if (catFilter) {
-      conditions.push(`li.category_id = $${paramIndex++}`);
+      conditions.push('li.category_id = ?');
       params.push(catFilter);
     }
     if (status) {
-      conditions.push(`li.status = $${paramIndex++}`);
+      conditions.push('li.status = ?');
       params.push(status);
     }
     if (search) {
-      conditions.push(`(li.item_name ILIKE $${paramIndex} OR li.description ILIKE $${paramIndex})`);
-      params.push(`%${search}%`);
-      paramIndex++;
+      conditions.push('(li.item_name LIKE ? OR li.description LIKE ?)');
+      params.push(`%${search}%`, `%${search}%`);
     }
 
     const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
 
-    const countResult = await pool.query(
-      `SELECT COUNT(*) FROM lost_items li ${whereClause}`,
-      params
-    );
+    const countRow = db.prepare(
+      `SELECT COUNT(*) as count FROM lost_items li ${whereClause}`
+    ).get(...params);
 
-    params.push(limit, offset);
-    const result = await pool.query(
+    const items = db.prepare(
       `SELECT li.*, u.full_name as reporter_name, c.category_name
        FROM lost_items li
        LEFT JOIN users u ON li.user_id = u.id
        LEFT JOIN categories c ON li.category_id = c.id
        ${whereClause}
        ORDER BY li.created_at DESC
-       LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
-      params
-    );
+       LIMIT ? OFFSET ?`
+    ).all(...params, parseInt(limit), parseInt(offset));
 
     res.json({
-      items: result.rows,
-      total: parseInt(countResult.rows[0].count),
+      items,
+      total: countRow.count,
       page: parseInt(page),
       limit: parseInt(limit),
     });
@@ -57,56 +52,53 @@ const getLostItems = async (req, res) => {
 };
 
 const createLostItem = async (req, res) => {
-  const client = await pool.connect();
   try {
     const { category_id, item_name, description, location, date_lost, campus_id, department_id, contact_info } = req.body;
     const image = req.file ? req.file.filename : null;
 
-    await client.query('BEGIN');
+    const createTxn = db.transaction(() => {
+      const result = db.prepare(
+        `INSERT INTO lost_items (user_id, category_id, item_name, description, image, location, date_lost, campus_id, department_id, contact_info)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(req.user.id, category_id, item_name, description, image, location, date_lost, campus_id || null, department_id || null, contact_info || null);
 
-    const result = await client.query(
-      `INSERT INTO lost_items (user_id, category_id, item_name, description, image, location, date_lost, campus_id, department_id, contact_info)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-      [req.user.id, category_id, item_name, description, image, location, date_lost, campus_id || null, department_id || null, contact_info || null]
-    );
+      const newItem = db.prepare('SELECT * FROM lost_items WHERE id = ?').get(result.lastInsertRowid);
+      activityService.log(req.user.id, `Reported lost item: ${item_name}`, 'lost_item', newItem.id);
 
-    const newItem = result.rows[0];
-    await activityService.log(req.user.id, `Reported lost item: ${item_name}`, 'lost_item', newItem.id);
+      return newItem;
+    });
 
-    await client.query('COMMIT');
+    const newItem = createTxn();
 
-    const matches = await matchingService.findMatches(newItem, 'lost');
+    const matches = matchingService.findMatches(newItem, 'lost');
     if (matches.length > 0) {
-      await matchingService.saveAndNotifyMatches(newItem, matches, 'lost');
+      matchingService.saveAndNotifyMatches(newItem, matches, 'lost');
     }
 
     res.status(201).json({ message: 'Lost item reported successfully', item: newItem, matchesFound: matches.length });
   } catch (error) {
-    await client.query('ROLLBACK');
     console.error('Create lost item error:', error);
     res.status(500).json({ message: 'Failed to report lost item.' });
-  } finally {
-    client.release();
   }
 };
 
 const getLostItemById = async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await pool.query(
+
+    const item = db.prepare(
       `SELECT li.*, u.full_name as reporter_name, u.email as reporter_email, c.category_name
        FROM lost_items li
        LEFT JOIN users u ON li.user_id = u.id
        LEFT JOIN categories c ON li.category_id = c.id
-       WHERE li.id = $1`,
-      [id]
-    );
+       WHERE li.id = ?`
+    ).get(id);
 
-    if (result.rows.length === 0) {
+    if (!item) {
       return res.status(404).json({ message: 'Lost item not found.' });
     }
 
-    res.json(result.rows[0]);
+    res.json(item);
   } catch (error) {
     console.error('Get lost item by id error:', error);
     res.status(500).json({ message: 'Failed to fetch lost item.' });
@@ -114,53 +106,49 @@ const getLostItemById = async (req, res) => {
 };
 
 const updateLostItem = async (req, res) => {
-  const client = await pool.connect();
   try {
     const { id } = req.params;
     const { category_id, item_name, description, location, date_lost, status, contact_info } = req.body;
     const image = req.file ? req.file.filename : undefined;
 
-    const existing = await client.query('SELECT * FROM lost_items WHERE id = $1', [id]);
-    if (existing.rows.length === 0) {
+    const existing = db.prepare('SELECT * FROM lost_items WHERE id = ?').get(id);
+    if (!existing) {
       return res.status(404).json({ message: 'Lost item not found.' });
     }
 
-    if (existing.rows[0].user_id !== req.user.id && req.user.role !== 'admin') {
+    if (existing.user_id !== req.user.id && req.user.role !== 'admin') {
       return res.status(403).json({ message: 'Not authorized to update this item.' });
     }
 
-    await client.query('BEGIN');
+    const updateTxn = db.transaction(() => {
+      const fields = [];
+      const params = [];
 
-    const fields = [];
-    const params = [];
-    let paramIndex = 1;
+      if (category_id) { fields.push('category_id = ?'); params.push(category_id); }
+      if (item_name) { fields.push('item_name = ?'); params.push(item_name); }
+      if (description) { fields.push('description = ?'); params.push(description); }
+      if (location) { fields.push('location = ?'); params.push(location); }
+      if (date_lost) { fields.push('date_lost = ?'); params.push(date_lost); }
+      if (status) { fields.push('status = ?'); params.push(status); }
+      if (contact_info) { fields.push('contact_info = ?'); params.push(contact_info); }
+      if (image) { fields.push('image = ?'); params.push(image); }
+      fields.push('updated_at = datetime(?)');
+      params.push(new Date().toISOString());
 
-    if (category_id) { fields.push(`category_id = $${paramIndex++}`); params.push(category_id); }
-    if (item_name) { fields.push(`item_name = $${paramIndex++}`); params.push(item_name); }
-    if (description) { fields.push(`description = $${paramIndex++}`); params.push(description); }
-    if (location) { fields.push(`location = $${paramIndex++}`); params.push(location); }
-    if (date_lost) { fields.push(`date_lost = $${paramIndex++}`); params.push(date_lost); }
-    if (status) { fields.push(`status = $${paramIndex++}`); params.push(status); }
-    if (contact_info) { fields.push(`contact_info = $${paramIndex++}`); params.push(contact_info); }
-    if (image) { fields.push(`image = $${paramIndex++}`); params.push(image); }
-    fields.push(`updated_at = NOW()`);
+      params.push(id);
+      db.prepare(`UPDATE lost_items SET ${fields.join(', ')} WHERE id = ?`).run(...params);
 
-    params.push(id);
-    const result = await client.query(
-      `UPDATE lost_items SET ${fields.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
-      params
-    );
+      const updated = db.prepare('SELECT * FROM lost_items WHERE id = ?').get(id);
+      activityService.log(req.user.id, `Updated lost item: ${updated.item_name}`, 'lost_item', id);
 
-    await activityService.log(req.user.id, `Updated lost item: ${result.rows[0].item_name}`, 'lost_item', id);
-    await client.query('COMMIT');
+      return updated;
+    });
 
-    res.json({ message: 'Lost item updated', item: result.rows[0] });
+    const item = updateTxn();
+    res.json({ message: 'Lost item updated', item });
   } catch (error) {
-    await client.query('ROLLBACK');
     console.error('Update lost item error:', error);
     res.status(500).json({ message: 'Failed to update lost item.' });
-  } finally {
-    client.release();
   }
 };
 
@@ -170,45 +158,40 @@ const getFoundItems = async (req, res) => {
     const offset = (page - 1) * limit;
     const conditions = [];
     const params = [];
-    let paramIndex = 1;
 
     const catFilter = category_id || category;
     if (catFilter) {
-      conditions.push(`fi.category_id = $${paramIndex++}`);
+      conditions.push('fi.category_id = ?');
       params.push(catFilter);
     }
     if (status) {
-      conditions.push(`fi.status = $${paramIndex++}`);
+      conditions.push('fi.status = ?');
       params.push(status);
     }
     if (search) {
-      conditions.push(`(fi.item_name ILIKE $${paramIndex} OR fi.description ILIKE $${paramIndex})`);
-      params.push(`%${search}%`);
-      paramIndex++;
+      conditions.push('(fi.item_name LIKE ? OR fi.description LIKE ?)');
+      params.push(`%${search}%`, `%${search}%`);
     }
 
     const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
 
-    const countResult = await pool.query(
-      `SELECT COUNT(*) FROM found_items fi ${whereClause}`,
-      params
-    );
+    const countRow = db.prepare(
+      `SELECT COUNT(*) as count FROM found_items fi ${whereClause}`
+    ).get(...params);
 
-    params.push(limit, offset);
-    const result = await pool.query(
+    const items = db.prepare(
       `SELECT fi.*, u.full_name as reporter_name, c.category_name
        FROM found_items fi
        LEFT JOIN users u ON fi.user_id = u.id
        LEFT JOIN categories c ON fi.category_id = c.id
        ${whereClause}
        ORDER BY fi.created_at DESC
-       LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
-      params
-    );
+       LIMIT ? OFFSET ?`
+    ).all(...params, parseInt(limit), parseInt(offset));
 
     res.json({
-      items: result.rows,
-      total: parseInt(countResult.rows[0].count),
+      items,
+      total: countRow.count,
       page: parseInt(page),
       limit: parseInt(limit),
     });
@@ -219,56 +202,53 @@ const getFoundItems = async (req, res) => {
 };
 
 const createFoundItem = async (req, res) => {
-  const client = await pool.connect();
   try {
     const { category_id, item_name, description, location, pickup_location, date_found, campus_id, department_id, verification_notes } = req.body;
     const image = req.file ? req.file.filename : null;
 
-    await client.query('BEGIN');
+    const createTxn = db.transaction(() => {
+      const result = db.prepare(
+        `INSERT INTO found_items (user_id, category_id, item_name, description, image, location, pickup_location, date_found, campus_id, department_id, verification_notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(req.user.id, category_id, item_name, description, image, location, pickup_location || null, date_found, campus_id || null, department_id || null, verification_notes || null);
 
-    const result = await client.query(
-      `INSERT INTO found_items (user_id, category_id, item_name, description, image, location, pickup_location, date_found, campus_id, department_id, verification_notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
-      [req.user.id, category_id, item_name, description, image, location, pickup_location || null, date_found, campus_id || null, department_id || null, verification_notes || null]
-    );
+      const newItem = db.prepare('SELECT * FROM found_items WHERE id = ?').get(result.lastInsertRowid);
+      activityService.log(req.user.id, `Reported found item: ${item_name}`, 'found_item', newItem.id);
 
-    const newItem = result.rows[0];
-    await activityService.log(req.user.id, `Reported found item: ${item_name}`, 'found_item', newItem.id);
+      return newItem;
+    });
 
-    await client.query('COMMIT');
+    const newItem = createTxn();
 
-    const matches = await matchingService.findMatches(newItem, 'found');
+    const matches = matchingService.findMatches(newItem, 'found');
     if (matches.length > 0) {
-      await matchingService.saveAndNotifyMatches(newItem, matches, 'found');
+      matchingService.saveAndNotifyMatches(newItem, matches, 'found');
     }
 
     res.status(201).json({ message: 'Found item reported successfully', item: newItem, matchesFound: matches.length });
   } catch (error) {
-    await client.query('ROLLBACK');
     console.error('Create found item error:', error);
     res.status(500).json({ message: 'Failed to report found item.' });
-  } finally {
-    client.release();
   }
 };
 
 const getFoundItemById = async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await pool.query(
+
+    const item = db.prepare(
       `SELECT fi.*, u.full_name as reporter_name, u.email as reporter_email, c.category_name
        FROM found_items fi
        LEFT JOIN users u ON fi.user_id = u.id
        LEFT JOIN categories c ON fi.category_id = c.id
-       WHERE fi.id = $1`,
-      [id]
-    );
+       WHERE fi.id = ?`
+    ).get(id);
 
-    if (result.rows.length === 0) {
+    if (!item) {
       return res.status(404).json({ message: 'Found item not found.' });
     }
 
-    res.json(result.rows[0]);
+    res.json(item);
   } catch (error) {
     console.error('Get found item by id error:', error);
     res.status(500).json({ message: 'Failed to fetch found item.' });
@@ -276,54 +256,50 @@ const getFoundItemById = async (req, res) => {
 };
 
 const updateFoundItem = async (req, res) => {
-  const client = await pool.connect();
   try {
     const { id } = req.params;
     const { category_id, item_name, description, location, pickup_location, date_found, status, verification_notes } = req.body;
     const image = req.file ? req.file.filename : undefined;
 
-    const existing = await client.query('SELECT * FROM found_items WHERE id = $1', [id]);
-    if (existing.rows.length === 0) {
+    const existing = db.prepare('SELECT * FROM found_items WHERE id = ?').get(id);
+    if (!existing) {
       return res.status(404).json({ message: 'Found item not found.' });
     }
 
-    if (existing.rows[0].user_id !== req.user.id && req.user.role !== 'admin') {
+    if (existing.user_id !== req.user.id && req.user.role !== 'admin') {
       return res.status(403).json({ message: 'Not authorized to update this item.' });
     }
 
-    await client.query('BEGIN');
+    const updateTxn = db.transaction(() => {
+      const fields = [];
+      const params = [];
 
-    const fields = [];
-    const params = [];
-    let paramIndex = 1;
+      if (category_id) { fields.push('category_id = ?'); params.push(category_id); }
+      if (item_name) { fields.push('item_name = ?'); params.push(item_name); }
+      if (description) { fields.push('description = ?'); params.push(description); }
+      if (location) { fields.push('location = ?'); params.push(location); }
+      if (pickup_location) { fields.push('pickup_location = ?'); params.push(pickup_location); }
+      if (date_found) { fields.push('date_found = ?'); params.push(date_found); }
+      if (status) { fields.push('status = ?'); params.push(status); }
+      if (verification_notes) { fields.push('verification_notes = ?'); params.push(verification_notes); }
+      if (image) { fields.push('image = ?'); params.push(image); }
+      fields.push('updated_at = datetime(?)');
+      params.push(new Date().toISOString());
 
-    if (category_id) { fields.push(`category_id = $${paramIndex++}`); params.push(category_id); }
-    if (item_name) { fields.push(`item_name = $${paramIndex++}`); params.push(item_name); }
-    if (description) { fields.push(`description = $${paramIndex++}`); params.push(description); }
-    if (location) { fields.push(`location = $${paramIndex++}`); params.push(location); }
-    if (pickup_location) { fields.push(`pickup_location = $${paramIndex++}`); params.push(pickup_location); }
-    if (date_found) { fields.push(`date_found = $${paramIndex++}`); params.push(date_found); }
-    if (status) { fields.push(`status = $${paramIndex++}`); params.push(status); }
-    if (verification_notes) { fields.push(`verification_notes = $${paramIndex++}`); params.push(verification_notes); }
-    if (image) { fields.push(`image = $${paramIndex++}`); params.push(image); }
-    fields.push(`updated_at = NOW()`);
+      params.push(id);
+      db.prepare(`UPDATE found_items SET ${fields.join(', ')} WHERE id = ?`).run(...params);
 
-    params.push(id);
-    const result = await client.query(
-      `UPDATE found_items SET ${fields.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
-      params
-    );
+      const updated = db.prepare('SELECT * FROM found_items WHERE id = ?').get(id);
+      activityService.log(req.user.id, `Updated found item: ${updated.item_name}`, 'found_item', id);
 
-    await activityService.log(req.user.id, `Updated found item: ${result.rows[0].item_name}`, 'found_item', id);
-    await client.query('COMMIT');
+      return updated;
+    });
 
-    res.json({ message: 'Found item updated', item: result.rows[0] });
+    const item = updateTxn();
+    res.json({ message: 'Found item updated', item });
   } catch (error) {
-    await client.query('ROLLBACK');
     console.error('Update found item error:', error);
     res.status(500).json({ message: 'Failed to update found item.' });
-  } finally {
-    client.release();
   }
 };
 

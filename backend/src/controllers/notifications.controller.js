@@ -4,7 +4,7 @@ const getNotifications = async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
-    const notifications = await notificationService.getUserNotifications(req.user.id, parseInt(limit), parseInt(offset));
+    const notifications = notificationService.getUserNotifications(req.user.id, parseInt(limit), parseInt(offset));
     res.json(notifications);
   } catch (error) {
     console.error('Get notifications error:', error);
@@ -14,7 +14,7 @@ const getNotifications = async (req, res) => {
 
 const getUnreadCount = async (req, res) => {
   try {
-    const count = await notificationService.getUnreadCount(req.user.id);
+    const count = notificationService.getUnreadCount(req.user.id);
     res.json({ count });
   } catch (error) {
     console.error('Get unread count error:', error);
@@ -25,7 +25,7 @@ const getUnreadCount = async (req, res) => {
 const markAsRead = async (req, res) => {
   try {
     const { id } = req.params;
-    await notificationService.markAsRead(id, req.user.id);
+    notificationService.markAsRead(id, req.user.id);
     res.json({ message: 'Notification marked as read.' });
   } catch (error) {
     console.error('Mark as read error:', error);
@@ -35,7 +35,7 @@ const markAsRead = async (req, res) => {
 
 const markAllAsRead = async (req, res) => {
   try {
-    await notificationService.markAllAsRead(req.user.id);
+    notificationService.markAllAsRead(req.user.id);
     res.json({ message: 'All notifications marked as read.' });
   } catch (error) {
     console.error('Mark all as read error:', error);

@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const jwtConfig = require('../config/jwt');
-const pool = require('../config/database');
+const db = require('../config/database');
 
 const authenticate = async (req, res, next) => {
   try {
@@ -12,13 +12,13 @@ const authenticate = async (req, res, next) => {
     const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, jwtConfig.secret);
 
-    const result = await pool.query('SELECT id, full_name, email, role, campus_id FROM users WHERE id = $1 AND is_active = true', [decoded.userId]);
+    const user = db.prepare('SELECT id, full_name, email, role, campus_id FROM users WHERE id = ? AND is_active = 1').get(decoded.userId);
 
-    if (result.rows.length === 0) {
+    if (!user) {
       return res.status(401).json({ message: 'Invalid token. User not found.' });
     }
 
-    req.user = result.rows[0];
+    req.user = user;
     next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {

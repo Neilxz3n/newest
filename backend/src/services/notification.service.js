@@ -1,4 +1,4 @@
-const pool = require('../config/database');
+const db = require('../config/database');
 
 class NotificationService {
   constructor() {
@@ -9,48 +9,44 @@ class NotificationService {
     this.io = io;
   }
 
-  async createNotification(userId, title, message, type, referenceId, referenceType) {
-    const result = await pool.query(
+  createNotification(userId, title, message, type, referenceId, referenceType) {
+    const result = db.prepare(
       `INSERT INTO notifications (user_id, title, message, type, reference_id, reference_type)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [userId, title, message, type, referenceId || null, referenceType || null]
-    );
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(userId, title, message, type, referenceId || null, referenceType || null);
+
+    const notification = db.prepare('SELECT * FROM notifications WHERE id = ?').get(result.lastInsertRowid);
 
     if (this.io) {
-      this.io.to(`user_${userId}`).emit('notification', result.rows[0]);
+      this.io.to(`user_${userId}`).emit('notification', notification);
     }
 
-    return result.rows[0];
+    return notification;
   }
 
-  async getUserNotifications(userId, limit, offset) {
-    const result = await pool.query(
-      `SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
-      [userId, limit || 20, offset || 0]
-    );
-    return result.rows;
+  getUserNotifications(userId, limit, offset) {
+    return db.prepare(
+      'SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?'
+    ).all(userId, limit || 20, offset || 0);
   }
 
-  async getUnreadCount(userId) {
-    const result = await pool.query(
-      'SELECT COUNT(*) as count FROM notifications WHERE user_id = $1 AND is_read = false',
-      [userId]
-    );
-    return parseInt(result.rows[0].count);
+  getUnreadCount(userId) {
+    const row = db.prepare(
+      'SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0'
+    ).get(userId);
+    return row.count;
   }
 
-  async markAsRead(notificationId, userId) {
-    await pool.query(
-      'UPDATE notifications SET is_read = true WHERE id = $1 AND user_id = $2',
-      [notificationId, userId]
-    );
+  markAsRead(notificationId, userId) {
+    db.prepare(
+      'UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?'
+    ).run(notificationId, userId);
   }
 
-  async markAllAsRead(userId) {
-    await pool.query(
-      'UPDATE notifications SET is_read = true WHERE user_id = $1 AND is_read = false',
-      [userId]
-    );
+  markAllAsRead(userId) {
+    db.prepare(
+      'UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0'
+    ).run(userId);
   }
 }
 

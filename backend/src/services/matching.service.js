@@ -1,27 +1,25 @@
-const pool = require('../config/database');
+const db = require('../config/database');
 const notificationService = require('./notification.service');
 
 class MatchingService {
-  async findMatches(item, type) {
+  findMatches(item, type) {
     const matches = [];
 
     if (type === 'lost') {
-      const result = await pool.query(
-        "SELECT * FROM found_items WHERE category_id = $1 AND status = 'pending'",
-        [item.category_id]
-      );
-      for (const foundItem of result.rows) {
+      const rows = db.prepare(
+        "SELECT * FROM found_items WHERE category_id = ? AND status = 'pending'"
+      ).all(item.category_id);
+      for (const foundItem of rows) {
         const score = this.calculateConfidence(item, foundItem);
         if (score >= 50) {
           matches.push({ foundItem, score });
         }
       }
     } else {
-      const result = await pool.query(
-        "SELECT * FROM lost_items WHERE category_id = $1 AND status = 'pending'",
-        [item.category_id]
-      );
-      for (const lostItem of result.rows) {
+      const rows = db.prepare(
+        "SELECT * FROM lost_items WHERE category_id = ? AND status = 'pending'"
+      ).all(item.category_id);
+      for (const lostItem of rows) {
         const score = this.calculateConfidence(lostItem, item);
         if (score >= 50) {
           matches.push({ lostItem, score });
@@ -63,24 +61,22 @@ class MatchingService {
     return Math.min(100, Math.round(score * 100) / 100);
   }
 
-  async saveAndNotifyMatches(item, matches, type) {
+  saveAndNotifyMatches(item, matches, type) {
     for (const match of matches) {
       const lostItemId = type === 'lost' ? item.id : match.lostItem.id;
       const foundItemId = type === 'lost' ? match.foundItem.id : item.id;
 
-      const existing = await pool.query(
-        'SELECT id FROM item_matches WHERE lost_item_id = $1 AND found_item_id = $2',
-        [lostItemId, foundItemId]
-      );
+      const existing = db.prepare(
+        'SELECT id FROM item_matches WHERE lost_item_id = ? AND found_item_id = ?'
+      ).get(lostItemId, foundItemId);
 
-      if (existing.rows.length === 0) {
-        await pool.query(
-          'INSERT INTO item_matches (lost_item_id, found_item_id, confidence_score, match_reason) VALUES ($1, $2, $3, $4)',
-          [lostItemId, foundItemId, match.score, 'Auto-matched by system']
-        );
+      if (!existing) {
+        db.prepare(
+          'INSERT INTO item_matches (lost_item_id, found_item_id, confidence_score, match_reason) VALUES (?, ?, ?, ?)'
+        ).run(lostItemId, foundItemId, match.score, 'Auto-matched by system');
 
         const notifyUserId = type === 'lost' ? item.user_id : match.lostItem.user_id;
-        await notificationService.createNotification(
+        notificationService.createNotification(
           notifyUserId,
           'Possible Match Found!',
           'A potential match has been found with ' + match.score + '% confidence.',

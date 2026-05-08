@@ -1,10 +1,9 @@
-const pool = require('../config/database');
+const db = require('../config/database');
 const activityService = require('../services/activity.service');
 const notificationService = require('../services/notification.service');
 const emailService = require('../services/email.service');
 
 const createClaim = async (req, res) => {
-  const client = await pool.connect();
   try {
     const { lost_item_id, found_item_id, proof } = req.body;
 
@@ -12,37 +11,37 @@ const createClaim = async (req, res) => {
       return res.status(400).json({ message: 'Either lost_item_id or found_item_id is required.' });
     }
 
-    await client.query('BEGIN');
+    const createTxn = db.transaction(() => {
+      const existingClaim = db.prepare(
+        `SELECT id FROM claims WHERE claimant_id = ? AND status = 'pending'
+         AND (lost_item_id = ? OR found_item_id = ?)`
+      ).get(req.user.id, lost_item_id || null, found_item_id || null);
 
-    const existingClaim = await client.query(
-      `SELECT id FROM claims WHERE claimant_id = $1 AND status = 'pending'
-       AND (lost_item_id = $2 OR found_item_id = $3)`,
-      [req.user.id, lost_item_id || null, found_item_id || null]
-    );
+      if (existingClaim) {
+        return { error: 'You already have a pending claim for this item.' };
+      }
 
-    if (existingClaim.rows.length > 0) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'You already have a pending claim for this item.' });
+      const result = db.prepare(
+        `INSERT INTO claims (claimant_id, lost_item_id, found_item_id, proof)
+         VALUES (?, ?, ?, ?)`
+      ).run(req.user.id, lost_item_id || null, found_item_id || null, proof);
+
+      const claim = db.prepare('SELECT * FROM claims WHERE id = ?').get(result.lastInsertRowid);
+      activityService.log(req.user.id, 'Submitted a claim', 'claim', claim.id);
+
+      return { claim };
+    });
+
+    const result = createTxn();
+
+    if (result.error) {
+      return res.status(400).json({ message: result.error });
     }
 
-    const result = await client.query(
-      `INSERT INTO claims (claimant_id, lost_item_id, found_item_id, proof)
-       VALUES ($1, $2, $3, $4) RETURNING *`,
-      [req.user.id, lost_item_id || null, found_item_id || null, proof]
-    );
-
-    const claim = result.rows[0];
-    await activityService.log(req.user.id, 'Submitted a claim', 'claim', claim.id);
-
-    await client.query('COMMIT');
-
-    res.status(201).json({ message: 'Claim submitted successfully', claim });
+    res.status(201).json({ message: 'Claim submitted successfully', claim: result.claim });
   } catch (error) {
-    await client.query('ROLLBACK');
     console.error('Create claim error:', error);
     res.status(500).json({ message: 'Failed to submit claim.' });
-  } finally {
-    client.release();
   }
 };
 
@@ -52,27 +51,24 @@ const getClaims = async (req, res) => {
     const offset = (page - 1) * limit;
     const conditions = [];
     const params = [];
-    let paramIndex = 1;
 
     if (req.user.role !== 'admin') {
-      conditions.push(`c.claimant_id = $${paramIndex++}`);
+      conditions.push('c.claimant_id = ?');
       params.push(req.user.id);
     }
 
     if (status) {
-      conditions.push(`c.status = $${paramIndex++}`);
+      conditions.push('c.status = ?');
       params.push(status);
     }
 
     const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
 
-    const countResult = await pool.query(
-      `SELECT COUNT(*) FROM claims c ${whereClause}`,
-      params
-    );
+    const countRow = db.prepare(
+      `SELECT COUNT(*) as count FROM claims c ${whereClause}`
+    ).get(...params);
 
-    params.push(limit, offset);
-    const result = await pool.query(
+    const claims = db.prepare(
       `SELECT c.*, u.full_name as claimant_name, u.email as claimant_email,
               li.item_name as lost_item_name, fi.item_name as found_item_name
        FROM claims c
@@ -81,13 +77,12 @@ const getClaims = async (req, res) => {
        LEFT JOIN found_items fi ON c.found_item_id = fi.id
        ${whereClause}
        ORDER BY c.created_at DESC
-       LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
-      params
-    );
+       LIMIT ? OFFSET ?`
+    ).all(...params, parseInt(limit), parseInt(offset));
 
     res.json({
-      claims: result.rows,
-      total: parseInt(countResult.rows[0].count),
+      claims,
+      total: countRow.count,
       page: parseInt(page),
       limit: parseInt(limit),
     });
@@ -100,7 +95,8 @@ const getClaims = async (req, res) => {
 const getClaimById = async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await pool.query(
+
+    const claim = db.prepare(
       `SELECT c.*, u.full_name as claimant_name, u.email as claimant_email,
               li.item_name as lost_item_name, li.description as lost_item_description,
               fi.item_name as found_item_name, fi.description as found_item_description
@@ -108,15 +104,13 @@ const getClaimById = async (req, res) => {
        LEFT JOIN users u ON c.claimant_id = u.id
        LEFT JOIN lost_items li ON c.lost_item_id = li.id
        LEFT JOIN found_items fi ON c.found_item_id = fi.id
-       WHERE c.id = $1`,
-      [id]
-    );
+       WHERE c.id = ?`
+    ).get(id);
 
-    if (result.rows.length === 0) {
+    if (!claim) {
       return res.status(404).json({ message: 'Claim not found.' });
     }
 
-    const claim = result.rows[0];
     if (req.user.role !== 'admin' && claim.claimant_id !== req.user.id) {
       return res.status(403).json({ message: 'Access denied.' });
     }
@@ -129,67 +123,66 @@ const getClaimById = async (req, res) => {
 };
 
 const approveClaim = async (req, res) => {
-  const client = await pool.connect();
   try {
     const { id } = req.params;
     const { admin_notes } = req.body;
 
-    await client.query('BEGIN');
+    const approveTxn = db.transaction(() => {
+      const claim = db.prepare(
+        `SELECT c.*, u.full_name as claimant_name, u.email as claimant_email,
+                li.item_name as lost_item_name, fi.item_name as found_item_name,
+                fi.pickup_location
+         FROM claims c
+         LEFT JOIN users u ON c.claimant_id = u.id
+         LEFT JOIN lost_items li ON c.lost_item_id = li.id
+         LEFT JOIN found_items fi ON c.found_item_id = fi.id
+         WHERE c.id = ?`
+      ).get(id);
 
-    const claimResult = await client.query(
-      `SELECT c.*, u.full_name as claimant_name, u.email as claimant_email,
-              li.item_name as lost_item_name, fi.item_name as found_item_name,
-              fi.pickup_location
-       FROM claims c
-       LEFT JOIN users u ON c.claimant_id = u.id
-       LEFT JOIN lost_items li ON c.lost_item_id = li.id
-       LEFT JOIN found_items fi ON c.found_item_id = fi.id
-       WHERE c.id = $1`,
-      [id]
-    );
+      if (!claim) {
+        return { error: 'Claim not found.', status: 404 };
+      }
 
-    if (claimResult.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ message: 'Claim not found.' });
-    }
+      if (claim.status !== 'pending') {
+        return { error: 'Claim has already been processed.', status: 400 };
+      }
 
-    const claim = claimResult.rows[0];
-    if (claim.status !== 'pending') {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'Claim has already been processed.' });
-    }
+      db.prepare(
+        `UPDATE claims SET status = 'approved', approved_by = ?, admin_notes = ?, updated_at = datetime(?) WHERE id = ?`
+      ).run(req.user.id, admin_notes || null, new Date().toISOString(), id);
 
-    await client.query(
-      `UPDATE claims SET status = 'approved', approved_by = $1, admin_notes = $2, updated_at = NOW() WHERE id = $3`,
-      [req.user.id, admin_notes || null, id]
-    );
+      if (claim.lost_item_id) {
+        db.prepare(
+          `UPDATE lost_items SET status = 'claimed', updated_at = datetime(?) WHERE id = ?`
+        ).run(new Date().toISOString(), claim.lost_item_id);
+      }
+      if (claim.found_item_id) {
+        db.prepare(
+          `UPDATE found_items SET status = 'claimed', updated_at = datetime(?) WHERE id = ?`
+        ).run(new Date().toISOString(), claim.found_item_id);
+      }
 
-    if (claim.lost_item_id) {
-      await client.query(
-        `UPDATE lost_items SET status = 'claimed', updated_at = NOW() WHERE id = $1`,
-        [claim.lost_item_id]
+      notificationService.createNotification(
+        claim.claimant_id,
+        'Claim Approved!',
+        `Your claim for "${claim.lost_item_name || claim.found_item_name}" has been approved.`,
+        'claim_approved',
+        claim.id,
+        'claim'
       );
+
+      activityService.log(req.user.id, `Approved claim #${id}`, 'claim', parseInt(id));
+
+      return { claim };
+    });
+
+    const result = approveTxn();
+
+    if (result.error) {
+      return res.status(result.status).json({ message: result.error });
     }
-    if (claim.found_item_id) {
-      await client.query(
-        `UPDATE found_items SET status = 'claimed', updated_at = NOW() WHERE id = $1`,
-        [claim.found_item_id]
-      );
-    }
 
-    await notificationService.createNotification(
-      claim.claimant_id,
-      'Claim Approved!',
-      `Your claim for "${claim.lost_item_name || claim.found_item_name}" has been approved.`,
-      'claim_approved',
-      claim.id,
-      'claim'
-    );
-
-    await activityService.log(req.user.id, `Approved claim #${id}`, 'claim', parseInt(id));
-
-    await client.query('COMMIT');
-
+    const { claim } = result;
     const itemName = claim.lost_item_name || claim.found_item_name;
     const emailHtml = emailService.getClaimApprovedTemplate({
       userName: claim.claimant_name,
@@ -200,62 +193,60 @@ const approveClaim = async (req, res) => {
 
     res.json({ message: 'Claim approved successfully.' });
   } catch (error) {
-    await client.query('ROLLBACK');
     console.error('Approve claim error:', error);
     res.status(500).json({ message: 'Failed to approve claim.' });
-  } finally {
-    client.release();
   }
 };
 
 const rejectClaim = async (req, res) => {
-  const client = await pool.connect();
   try {
     const { id } = req.params;
     const { admin_notes } = req.body;
 
-    await client.query('BEGIN');
+    const rejectTxn = db.transaction(() => {
+      const claim = db.prepare(
+        `SELECT c.*, u.full_name as claimant_name, u.email as claimant_email,
+                li.item_name as lost_item_name, fi.item_name as found_item_name
+         FROM claims c
+         LEFT JOIN users u ON c.claimant_id = u.id
+         LEFT JOIN lost_items li ON c.lost_item_id = li.id
+         LEFT JOIN found_items fi ON c.found_item_id = fi.id
+         WHERE c.id = ?`
+      ).get(id);
 
-    const claimResult = await client.query(
-      `SELECT c.*, u.full_name as claimant_name, u.email as claimant_email,
-              li.item_name as lost_item_name, fi.item_name as found_item_name
-       FROM claims c
-       LEFT JOIN users u ON c.claimant_id = u.id
-       LEFT JOIN lost_items li ON c.lost_item_id = li.id
-       LEFT JOIN found_items fi ON c.found_item_id = fi.id
-       WHERE c.id = $1`,
-      [id]
-    );
+      if (!claim) {
+        return { error: 'Claim not found.', status: 404 };
+      }
 
-    if (claimResult.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ message: 'Claim not found.' });
+      if (claim.status !== 'pending') {
+        return { error: 'Claim has already been processed.', status: 400 };
+      }
+
+      db.prepare(
+        `UPDATE claims SET status = 'rejected', approved_by = ?, admin_notes = ?, updated_at = datetime(?) WHERE id = ?`
+      ).run(req.user.id, admin_notes || null, new Date().toISOString(), id);
+
+      notificationService.createNotification(
+        claim.claimant_id,
+        'Claim Rejected',
+        `Your claim for "${claim.lost_item_name || claim.found_item_name}" has been rejected.`,
+        'claim_rejected',
+        claim.id,
+        'claim'
+      );
+
+      activityService.log(req.user.id, `Rejected claim #${id}`, 'claim', parseInt(id));
+
+      return { claim };
+    });
+
+    const result = rejectTxn();
+
+    if (result.error) {
+      return res.status(result.status).json({ message: result.error });
     }
 
-    const claim = claimResult.rows[0];
-    if (claim.status !== 'pending') {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'Claim has already been processed.' });
-    }
-
-    await client.query(
-      `UPDATE claims SET status = 'rejected', approved_by = $1, admin_notes = $2, updated_at = NOW() WHERE id = $3`,
-      [req.user.id, admin_notes || null, id]
-    );
-
-    await notificationService.createNotification(
-      claim.claimant_id,
-      'Claim Rejected',
-      `Your claim for "${claim.lost_item_name || claim.found_item_name}" has been rejected.`,
-      'claim_rejected',
-      claim.id,
-      'claim'
-    );
-
-    await activityService.log(req.user.id, `Rejected claim #${id}`, 'claim', parseInt(id));
-
-    await client.query('COMMIT');
-
+    const { claim } = result;
     const itemName = claim.lost_item_name || claim.found_item_name;
     const emailHtml = emailService.getClaimRejectedTemplate({
       userName: claim.claimant_name,
@@ -266,11 +257,8 @@ const rejectClaim = async (req, res) => {
 
     res.json({ message: 'Claim rejected.' });
   } catch (error) {
-    await client.query('ROLLBACK');
     console.error('Reject claim error:', error);
     res.status(500).json({ message: 'Failed to reject claim.' });
-  } finally {
-    client.release();
   }
 };
 

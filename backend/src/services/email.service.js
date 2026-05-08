@@ -1,6 +1,6 @@
 const nodemailer = require('nodemailer');
 const emailConfig = require('../config/email');
-const pool = require('../config/database');
+const db = require('../config/database');
 
 class EmailService {
   constructor() {
@@ -16,17 +16,15 @@ class EmailService {
         html,
       });
 
-      await pool.query(
-        'INSERT INTO email_logs (recipient_email, subject, status, sent_at) VALUES ($1, $2, $3, NOW())',
-        [to, subject, 'sent']
-      );
+      db.prepare(
+        'INSERT INTO email_logs (recipient_email, subject, status, sent_at) VALUES (?, ?, ?, datetime(?))'
+      ).run(to, subject, 'sent', new Date().toISOString());
 
       return { success: true, messageId: info.messageId };
     } catch (error) {
-      await pool.query(
-        'INSERT INTO email_logs (recipient_email, subject, status, error_message) VALUES ($1, $2, $3, $4)',
-        [to, subject, 'failed', error.message]
-      );
+      db.prepare(
+        'INSERT INTO email_logs (recipient_email, subject, status, error_message) VALUES (?, ?, ?, ?)'
+      ).run(to, subject, 'failed', error.message);
       console.error('Email send error:', error.message);
       return { success: false, error: error.message };
     }
